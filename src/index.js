@@ -397,8 +397,6 @@ function extractDisplayFields(currentData) {
         : [];
     const displayFields = [];
 
-    const searchFieldIds = (fields.searchFields || []).map(sf => (sf && (sf.id || sf.name)) || '');
-
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
         fields.dimensions.forEach((f, fIdx) => {
             if (!f) return;
@@ -434,14 +432,12 @@ function extractDisplayFields(currentData) {
     if (displayFields.length === 0 && allHeaders.length > 0) {
         allHeaders.forEach((h, idx) => {
             if (!h) return;
-            if (!searchFieldIds.includes(h.id) && !searchFieldIds.includes(h.name)) {
-                displayFields.push({
-                    id: h.id || `col_${idx}`,
-                    name: h.name || h.id || `Cột ${idx + 1}`,
-                    type: h.type || '',
-                    rawIndex: idx
-                });
-            }
+            displayFields.push({
+                id: h.id || `col_${idx}`,
+                name: h.name || h.id || `Cột ${idx + 1}`,
+                type: h.type || '',
+                rawIndex: idx
+            });
         });
     }
 
@@ -872,24 +868,7 @@ function renderTable() {
         // Lọc ra các cột được phép hiển thị (visible !== false)
         const activeColumns = (userColumnConfigs || []).filter(c => c && c.visible !== false);
 
-        // Xác định các cột tìm kiếm
-        const designatedSearchIndices = [];
-        const designatedSearchNames = [];
-        if (fields.searchFields && Array.isArray(fields.searchFields) && fields.searchFields.length > 0) {
-            fields.searchFields.forEach(f => {
-                if (!f) return;
-                const idx = allHeaders.findIndex(h => h && ((h.id && h.id === f.id) || h.name === f.name));
-                if (idx !== -1 && !designatedSearchIndices.includes(idx)) {
-                    designatedSearchIndices.push(idx);
-                    designatedSearchNames.push(f.name || f.id);
-                }
-            });
-        }
-
-        let autoPlaceholder = 'Tìm kiếm nhanh...';
-        if (designatedSearchNames.length > 0) {
-            autoPlaceholder = `Tìm theo: ${designatedSearchNames.join(', ')}...`;
-        }
+        const autoPlaceholder = 'Tìm kiếm nhanh...';
         const finalPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value && styleConfig.searchPlaceholder.value.trim() !== '')
             ? styleConfig.searchPlaceholder.value
             : autoPlaceholder;
@@ -898,9 +877,7 @@ function renderTable() {
         let filteredRows = rawRows;
         if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
             const words = remove_accents(tableState.searchQuery.trim()).split(/\s+/).filter(Boolean);
-            const searchCols = designatedSearchIndices.length > 0
-                ? designatedSearchIndices
-                : activeColumns.map(c => c.rawIndex);
+            const searchCols = activeColumns.map(c => c.rawIndex);
 
             filteredRows = rawRows.filter(row => {
                 if (!row) return false;

@@ -1,37 +1,22 @@
 {
     "data": [
         {
-            "id": "concepts",
-            "label": "Dữ liệu bảng",
-            "elements": [
-                {
-                    "id": "dimensions",
-                    "label": "Dimensions (Các cột hiển thị)",
-                    "type": "DIMENSION",
-                    "options": {
-                        "min": 0,
-                        "max": 30
-                    }
-                },
-                {
-                    "id": "metrics",
-                    "label": "Metrics (Các cột số liệu)",
-                    "type": "METRIC",
-                    "options": {
-                        "min": 0,
-                        "max": 30
-                    }
-                },
-                {
-                    "id": "searchFields",
-                    "label": "🔍 Cột Tìm kiếm nhanh (Kéo cột cần tìm vào đây)",
-                    "type": "DIMENSION",
-                    "options": {
-                        "min": 0,
-                        "max": 10
-                    }
-                }
-            ]
+            "id": "dimensions",
+            "label": "Dimensions (Các cột hiển thị)",
+            "type": "DIMENSION",
+            "options": {
+                "min": 0,
+                "max": 50
+            }
+        },
+        {
+            "id": "metrics",
+            "label": "Metrics (Các cột số liệu)",
+            "type": "METRIC",
+            "options": {
+                "min": 0,
+                "max": 50
+            }
         }
     ],
     "style": [
