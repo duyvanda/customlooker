@@ -12,7 +12,7 @@ let userColumnConfigs = null; // Cấu hình cột tùy biến
 let userConditionalRules = null; // Quy tắc tô màu động từ Modal
 
 let tableState = {
-    sortColumn: null,       // index trong activeColumns đang sort (0-based) hoặc null = theo Looker Studio Sort
+    sortColumn: null,       // index trong activeColumns đang sort (0-based) hoặc null
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
     pageSize: 20,           // Mặc định 20 dòng/trang
@@ -373,20 +373,29 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
 // HÀM SO SÁNH DỮ LIỆU ĐA KIỂU (Natural Sort)
 function compareValues(a, b, fieldType = '') {
     if (a === b) return 0;
-    if (a === null || a === undefined || a === '') return 1;
-    if (b === null || b === undefined || b === '') return -1;
+    const isAEmpty = (a === null || a === undefined || String(a).trim() === '');
+    const isBEmpty = (b === null || b === undefined || String(b).trim() === '');
+    if (isAEmpty && isBEmpty) return 0;
+    if (isAEmpty) return 1;
+    if (isBEmpty) return -1;
 
+    const strA = String(a).trim();
+    const strB = String(b).trim();
+
+    // 1. So sánh ngày tháng
     if (isDateValue(a, fieldType) && isDateValue(b, fieldType)) {
-        const strA = String(a).trim();
-        const strB = String(b).trim();
         return strA.localeCompare(strB);
     }
 
-    if (isNumericValue(a, fieldType) && isNumericValue(b, fieldType)) {
+    // 2. So sánh số thực
+    const isNumA = isNumericValue(a, fieldType);
+    const isNumB = isNumericValue(b, fieldType);
+    if (isNumA && isNumB) {
         return Number(a) - Number(b);
     }
 
-    return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(String(a), String(b));
+    // 3. So sánh chuỗi tiếng Việt tự nhiên
+    return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
 }
 
 // HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ
@@ -458,6 +467,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
             format: 'auto',
+            sort: 'none',
             type: df.type || '',
             rawIndex: df.rawIndex
         }));
@@ -477,6 +487,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 ...ec,
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
+                sort: ec.sort || 'none',
                 type: matchedDf.type || ec.type || '',
                 rawIndex: matchedDf.rawIndex
             });
@@ -492,6 +503,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
                 format: 'auto',
+                sort: 'none',
                 type: df.type || '',
                 rawIndex: df.rawIndex
             });
@@ -563,12 +575,13 @@ function openColumnConfigModal() {
                             <table class="col-config-table">
                                 <thead>
                                     <tr>
-                                        <th style="width:40px; text-align:center;">STT</th>
-                                        <th style="width:70px; text-align:center;">Hiện</th>
-                                        <th style="width:200px;">Tên gốc Looker/BQ</th>
-                                        <th style="width:250px;">Tên hiển thị (Label)</th>
-                                        <th style="width:200px;">Định dạng (Format)</th>
-                                        <th style="width:90px; text-align:center;">Thứ tự</th>
+                                        <th style="width:35px; text-align:center;">STT</th>
+                                        <th style="width:50px; text-align:center;">Hiện</th>
+                                        <th style="width:170px;">Tên gốc Looker/BQ</th>
+                                        <th style="width:200px;">Tên hiển thị (Label)</th>
+                                        <th style="width:170px;">Định dạng (Format)</th>
+                                        <th style="width:150px;">Sắp xếp (Sort)</th>
+                                        <th style="width:75px; text-align:center;">Thứ tự</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -595,6 +608,13 @@ function openColumnConfigModal() {
                                                     <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
                                                     <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
                                                     <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="col-config-select col-sort-sel" data-idx="${idx}">
+                                                    <option value="none" ${(!col.sort || col.sort === 'none') ? 'selected' : ''}>-- Mặc định --</option>
+                                                    <option value="asc" ${col.sort === 'asc' ? 'selected' : ''}>Tăng dần (ASC ▲)</option>
+                                                    <option value="desc" ${col.sort === 'desc' ? 'selected' : ''}>Giảm dần (DESC ▼)</option>
                                                 </select>
                                             </td>
                                             <td style="text-align:center; white-space:nowrap;">
@@ -698,9 +718,11 @@ function openColumnConfigModal() {
                         const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
                         const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
                         const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
+                        const sortSel = overlay.querySelector(`.col-sort-sel[data-idx="${idx}"]`);
                         if (chk) workingConfigs[idx].visible = chk.checked;
                         if (titleInp) workingConfigs[idx].title = titleInp.value;
                         if (fmtSel) workingConfigs[idx].format = fmtSel.value;
+                        if (sortSel) workingConfigs[idx].sort = sortSel.value;
                     }
                 } else if (activeTab === 'rules') {
                     for (let idx = 0; idx < workingRules.length; idx++) {
@@ -796,6 +818,14 @@ function openColumnConfigModal() {
                 syncInputsBeforeMove();
                 userColumnConfigs = workingConfigs;
                 userConditionalRules = workingRules;
+                
+                // Đồng bộ sort từ modal sang tableState nếu có cột được chỉ định sort
+                const configSortIdx = userColumnConfigs.findIndex(c => c && c.visible !== false && c.sort && c.sort !== 'none');
+                if (configSortIdx !== -1) {
+                    tableState.sortColumn = configSortIdx;
+                    tableState.sortDirection = userColumnConfigs[configSortIdx].sort;
+                }
+
                 try {
                     localStorage.setItem(USER_CONFIG_STORAGE_KEY, JSON.stringify(userColumnConfigs));
                     localStorage.setItem(USER_RULES_STORAGE_KEY, JSON.stringify(userConditionalRules));
@@ -894,12 +924,24 @@ function renderTable() {
             });
         }
 
-        // 2. SORT DỮ LIỆU (Tự động theo Looker Studio Sort nếu sortColumn === null)
+        // 2. SORT DỮ LIỆU
+        // Nếu chưa bấm sort trên header, kiểm tra xem trong cấu hình cột có đặt sort mặc định không
+        let activeSortColIdx = tableState.sortColumn;
+        let activeSortDir = tableState.sortDirection;
+
+        if (activeSortColIdx === null) {
+            const defaultSortColIdx = activeColumns.findIndex(c => c && c.sort && c.sort !== 'none');
+            if (defaultSortColIdx !== -1) {
+                activeSortColIdx = defaultSortColIdx;
+                activeSortDir = activeColumns[defaultSortColIdx].sort;
+            }
+        }
+
         let sortedRows = [...filteredRows];
-        if (tableState.sortColumn !== null && tableState.sortColumn >= 0 && tableState.sortColumn < activeColumns.length && activeColumns[tableState.sortColumn]) {
-            const targetCol = activeColumns[tableState.sortColumn];
+        if (activeSortColIdx !== null && activeSortColIdx >= 0 && activeSortColIdx < activeColumns.length && activeColumns[activeSortColIdx]) {
+            const targetCol = activeColumns[activeSortColIdx];
             const rawIdx = targetCol.rawIndex;
-            const dir = tableState.sortDirection === 'desc' ? -1 : 1;
+            const dir = activeSortDir === 'desc' ? -1 : 1;
             sortedRows.sort((rowA, rowB) => {
                 if (!rowA && !rowB) return 0;
                 if (!rowA) return 1;
@@ -1026,12 +1068,12 @@ function renderTable() {
 
         activeColumns.forEach((col, colIdx) => {
             const th = document.createElement('th');
-            const isSorted = tableState.sortColumn === colIdx;
-            if (isSorted) th.className = 'th-sorted';
+            const isCurrentlySorted = (activeSortColIdx === colIdx);
+            if (isCurrentlySorted) th.className = 'th-sorted';
 
             let icon = '↕';
-            if (isSorted) {
-                icon = tableState.sortDirection === 'asc' ? '▲' : '▼';
+            if (isCurrentlySorted) {
+                icon = activeSortDir === 'asc' ? '▲' : '▼';
             }
 
             th.innerHTML = `
@@ -1041,13 +1083,13 @@ function renderTable() {
                 </div>
             `;
 
-            // 3-state sorting: Asc -> Desc -> Reset to Looker Studio default sort
+            // 3-state sorting trên header: Asc -> Desc -> Reset
             th.addEventListener('click', () => {
                 if (tableState.sortColumn === colIdx) {
                     if (tableState.sortDirection === 'asc') {
                         tableState.sortDirection = 'desc';
                     } else {
-                        // Click lần 3: Reset về thứ tự sort mặc định của Looker Studio
+                        // Click lần 3: Khôi phục sort mặc định
                         tableState.sortColumn = null;
                         tableState.sortDirection = 'asc';
                     }
@@ -1055,6 +1097,7 @@ function renderTable() {
                     tableState.sortColumn = colIdx;
                     tableState.sortDirection = 'asc';
                 }
+                tableState.currentPage = 1;
                 renderTable();
             });
 
@@ -1283,8 +1326,6 @@ function drawVisualization(data) {
         if (!document.body) return;
 
         currentData = data;
-        // Reset client sort để áp dụng ngay lập tức cấu hình Sort từ Setup panel của Looker Studio
-        tableState.sortColumn = null;
         renderTable();
 
     } catch (err) {
