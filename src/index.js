@@ -1,28 +1,26 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
+// Biến trạng thái lần đầu render
+let firstRender = true;
+
 // HÀM HIỂN THỊ SKELETON LOADING (An toàn DOM, chạy ngay khi khởi động)
 function showSkeleton() {
     try {
-        if (!document.body) {
-            window.addEventListener('DOMContentLoaded', showSkeleton);
-            return;
-        }
-        if (!document.body.hasChildNodes() || document.body.innerHTML.trim() === '') {
-            document.body.innerHTML = `
-                <div class="container skeleton-container">
-                    <div class="skeleton skeleton-btn"></div>
-                    <div class="skeleton-table">
-                        <div class="skeleton skeleton-header"></div>
-                        <div class="skeleton skeleton-row"></div>
-                        <div class="skeleton skeleton-row"></div>
-                        <div class="skeleton skeleton-row"></div>
-                        <div class="skeleton skeleton-row"></div>
-                        <div class="skeleton skeleton-row"></div>
-                    </div>
+        if (!document.body) return;
+        document.body.innerHTML = `
+            <div class="container skeleton-container">
+                <div class="skeleton skeleton-btn"></div>
+                <div class="skeleton-table">
+                    <div class="skeleton skeleton-header"></div>
+                    <div class="skeleton skeleton-row"></div>
+                    <div class="skeleton skeleton-row"></div>
+                    <div class="skeleton skeleton-row"></div>
+                    <div class="skeleton skeleton-row"></div>
+                    <div class="skeleton skeleton-row"></div>
                 </div>
-            `;
-        }
+            </div>
+        `;
     } catch (e) {
         console.warn('[ExcelViz] Skeleton load warning:', e);
     }
@@ -30,7 +28,7 @@ function showSkeleton() {
 
 // Khởi chạy skeleton an toàn
 if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', showSkeleton);
+    document.addEventListener('DOMContentLoaded', showSkeleton, { once: true });
 } else {
     showSkeleton();
 }
@@ -74,7 +72,9 @@ function drawVisualization(data) {
     try {
         if (!document.body) return;
 
-        // Clear skeleton hoặc giao diện cũ
+        firstRender = false;
+
+        // Xóa skeleton để render nội dung thật
         document.body.innerHTML = '';
 
         // Tạo container chính
