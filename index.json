@@ -23,6 +23,15 @@
                     }
                 },
                 {
+                    "id": "badgeFields",
+                    "label": "🏷️ Cột hiển thị Badge (Kéo cột cần tạo Badge vào đây)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 5
+                    }
+                },
+                {
                     "id": "searchFields",
                     "label": "🔍 Cột Tìm kiếm nhanh (Kéo cột cần tìm vào đây)",
                     "type": "DIMENSION",
@@ -52,7 +61,7 @@
                         { "label": "100 dòng/trang", "value": "100" },
                         { "label": "250 dòng/trang", "value": "250" },
                         { "label": "500 dòng/trang", "value": "500" },
-                        { "label": "1000 dòng/trang", "value": "1000" },
+                        { "label": "1000 dòng/trang (Xem tối đa)", "value": "1000" },
                         { "label": "Tất cả dòng (Không phân trang)", "value": "-1" }
                     ]
                 },
@@ -107,41 +116,45 @@
         },
         {
             "id": "conditionalBadges",
-            "label": "🎨 Tô Màu & Badge Trạng Thái (Admin Setup)",
+            "label": "🎨 Điều Kiện Tô Màu & Badge (Conditional Formatting)",
             "elements": [
                 {
-                    "id": "successKeywords",
+                    "id": "badgeGreenWords",
                     "label": "Từ khóa Badge Xanh Lá (✓ Success)",
                     "type": "TEXTINPUT",
                     "defaultValue": "Done, Active, Thành công, Hoàn tất, Đạt"
                 },
                 {
-                    "id": "dangerKeywords",
+                    "id": "badgeRedWords",
                     "label": "Từ khóa Badge Đỏ (✕ Danger)",
                     "type": "TEXTINPUT",
                     "defaultValue": "OFF, Fail, Failed, Cancel, Hủy, Thất bại, Late"
                 },
                 {
-                    "id": "warningKeywords",
+                    "id": "badgeYellowWords",
                     "label": "Từ khóa Badge Vàng (⏳ Warning)",
                     "type": "TEXTINPUT",
                     "defaultValue": "Pending, Chờ xử lý, Đang xử lý, Warning"
                 },
                 {
-                    "id": "infoKeywords",
+                    "id": "badgeBlueWords",
                     "label": "Từ khóa Badge Xanh Dương (Info)",
                     "type": "TEXTINPUT",
                     "defaultValue": "CH-replace, Staging, Info"
                 },
                 {
-                    "id": "grayKeywords",
-                    "label": "Từ khóa Badge Xám (Gray)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": "None, Null, N/A"
+                    "id": "badgeFallbackStyle",
+                    "label": "Các giá trị khác trong Cột Badge",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "badge_gray",
+                    "options": [
+                        { "label": "Thẻ Badge Xám (Subtle Badge)", "value": "badge_gray" },
+                        { "label": "Chữ thường (Plain Text)", "value": "plain_text" }
+                    ]
                 },
                 {
                     "id": "highlightPosNeg",
-                    "label": "Tự động tô màu Số dương Xanh / Số âm Đỏ",
+                    "label": "Tô màu số liệu: Dương Xanh / Âm Đỏ",
                     "type": "CHECKBOX",
                     "defaultValue": false
                 }
