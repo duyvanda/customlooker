@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xuất Dữ Liệu Excel</title>
+    <title>Xuất File Excel</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -22,7 +22,7 @@
             background: white;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            max-width: 640px;
+            max-width: 580px;
             width: 100%;
             padding: 36px;
         }
@@ -69,7 +69,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 22px;
+            padding: 12px 24px;
             border-radius: 8px;
             font-weight: 600;
             font-size: 14px;
@@ -80,8 +80,6 @@
         }
         .btn-green { background: #107c41; color: white; }
         .btn-green:hover { background: #0b5c30; }
-        .btn-gray { background: #e5e7eb; color: #374151; }
-        .btn-gray:hover { background: #d1d5db; }
         
         .info-grid {
             display: grid;
@@ -127,8 +125,7 @@
     </div>
 
     <div class="action-bar" id="actionBar" style="display: none;">
-        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải File Excel (.xlsx)</button>
-        <button class="btn btn-gray" id="btnCopyJson">📋 Copy Dữ Liệu JSON (cho API)</button>
+        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải Lại File Excel (.xlsx)</button>
     </div>
 
     <div class="info-grid" id="infoGrid" style="display: none;">
@@ -244,31 +241,7 @@
         const rows = payload.rows || [];
         const fileName = payload.fileName || 'Bao_cao_Looker_Studio.xlsx';
 
-        let excelData = payload.excelData;
-        if (!excelData || !Array.isArray(excelData) || excelData.length === 0) {
-            excelData = rows.map(row => {
-                let obj = {};
-                headers.forEach((h, i) => {
-                    const val = row[i];
-                    if (val === null || val === undefined) {
-                        obj[h] = '';
-                    } else {
-                        const sVal = String(val).trim();
-                        if (/^0\d+$/.test(sVal)) {
-                            obj[h] = sVal;
-                        } else if (typeof val === 'number') {
-                            obj[h] = val;
-                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
-                            obj[h] = Number(sVal);
-                        } else {
-                            obj[h] = String(val);
-                        }
-                    }
-                });
-                return obj;
-            });
-        }
-        globalData = { headers, rows, excelData, fileName };
+        globalData = { headers, rows, fileName };
 
         // Tự động tải Excel ngay
         const success = downloadExcelFile(headers, rows, fileName);
@@ -292,7 +265,7 @@
     window.addEventListener('message', function(event) {
         const data = event.data;
         if (!data) return;
-        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows || data.excelData) {
+        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows) {
             processPayload(data);
         }
     });
@@ -302,17 +275,6 @@
         if (!globalData) return;
         downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName);
         showToast('📥 Đang tải file Excel (.xlsx)...');
-    });
-
-    // Nút Copy JSON
-    document.getElementById('btnCopyJson').addEventListener('click', () => {
-        if (!globalData) return;
-        const jsonStr = JSON.stringify(globalData.excelData, null, 2);
-        navigator.clipboard.writeText(jsonStr).then(() => {
-            showToast('✓ Đã copy ' + globalData.rows.length + ' dòng dữ liệu JSON!');
-        }).catch(err => {
-            prompt('Copy dữ liệu JSON:', jsonStr);
-        });
     });
 </script>
 </body>
