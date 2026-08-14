@@ -2,11 +2,11 @@
     "data": [
         {
             "id": "concepts",
-            "label": "Dữ liệu bảng (Table Data)",
+            "label": "Data",
             "elements": [
                 {
                     "id": "dimensions",
-                    "label": "Dimension (Thứ nguyên hiển thị)",
+                    "label": "Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -15,7 +15,7 @@
                 },
                 {
                     "id": "metrics",
-                    "label": "Metric (Chỉ số hiển thị)",
+                    "label": "Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
@@ -24,7 +24,7 @@
                 },
                 {
                     "id": "freezeDimensions",
-                    "label": "📌 Cố định Dimension (Freeze Columns)",
+                    "label": "Freeze Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -33,7 +33,7 @@
                 },
                 {
                     "id": "searchFields",
-                    "label": "🔍 Cột quét tìm kiếm (Search Columns)",
+                    "label": "Search Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -42,7 +42,7 @@
                 },
                 {
                     "id": "sortDimensions",
-                    "label": "↕️ Cột Dimension sắp xếp (Sort 1–3)",
+                    "label": "Sort Dimension (1–3)",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -51,7 +51,7 @@
                 },
                 {
                     "id": "sortMetrics",
-                    "label": "↕️ Cột Metric sắp xếp (Sort 1–3)",
+                    "label": "Sort Metric (1–3)",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
@@ -60,7 +60,7 @@
                 },
                 {
                     "id": "conditionalFields",
-                    "label": "🎨 Cột Dimension tô màu (Rules 1–3)",
+                    "label": "Conditional Dimension (1–3)",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -69,7 +69,7 @@
                 },
                 {
                     "id": "conditionalMetricFields",
-                    "label": "🎨 Cột Metric tô màu (Rules 1–3)",
+                    "label": "Conditional Metric (1–3)",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
