@@ -3,36 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xuất File Excel</title>
+    <title>Xuất Dữ Liệu & Copy JSON</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f3f4f6;
+            background: #f1f5f9;
             margin: 0;
-            padding: 20px;
+            padding: 24px;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            color: #0f172a;
         }
         .card {
-            background: white;
+            background: #ffffff;
             border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            max-width: 580px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            max-width: 680px;
             width: 100%;
-            padding: 36px;
+            padding: 32px;
+            border: 1px solid #e2e8f0;
         }
         .header {
             display: flex;
             align-items: center;
             gap: 16px;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e2e8f0;
             padding-bottom: 20px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
         .status-icon {
             width: 48px;
@@ -49,65 +51,118 @@
         .spinner {
             width: 36px;
             height: 36px;
-            border: 4px solid #e5e7eb;
+            border: 4px solid #e2e8f0;
             border-top-color: #107c41;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             flex-shrink: 0;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        h1 { margin: 0; font-size: 20px; color: #111827; }
-        p { margin: 4px 0 0; color: #6b7280; font-size: 14px; }
+        h1 { margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; }
+        p { margin: 4px 0 0; color: #64748b; font-size: 13.5px; }
         
         .action-bar {
             display: flex;
             gap: 12px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             flex-wrap: wrap;
         }
         .btn {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 24px;
+            padding: 11px 20px;
             border-radius: 8px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13.5px;
             cursor: pointer;
             border: none;
             transition: all 0.15s;
             text-decoration: none;
+            font-family: inherit;
         }
-        .btn-green { background: #107c41; color: white; }
+        .btn-green {
+            background: #107c41;
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
         .btn-green:hover { background: #0b5c30; }
+        
+        .btn-blue {
+            background: #0284c7;
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        .btn-blue:hover { background: #0369a1; }
         
         .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 2fr;
             gap: 12px;
+            margin-bottom: 20px;
         }
         .info-box {
-            background: #f9fafb;
-            padding: 14px 18px;
+            background: #f8fafc;
+            padding: 12px 16px;
             border-radius: 10px;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e2e8f0;
         }
-        .info-label { font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
-        .info-val { font-size: 18px; font-weight: 700; color: #1f2937; margin-top: 4px; }
-        .info-filename { font-size: 13px; font-weight: 600; color: #1f2937; margin-top: 4px; word-break: break-word; }
+        .info-label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+        .info-val { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px; }
+        .info-filename { font-size: 12.5px; font-weight: 600; color: #0f172a; margin-top: 3px; word-break: break-word; }
+
+        /* JSON CONTAINER */
+        .json-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .json-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .json-title {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .json-textarea {
+            width: 100%;
+            height: 140px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 11.5px;
+            color: #0f172a;
+            resize: vertical;
+            outline: none;
+        }
+        .json-textarea:focus {
+            border-color: #0284c7;
+        }
 
         .toast {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            background: #1f2937;
+            background: #0f172a;
             color: white;
             padding: 12px 20px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13.5px;
+            font-weight: 600;
             display: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
             z-index: 9999;
+            border: 1px solid #334155;
         }
     </style>
 </head>
@@ -125,22 +180,35 @@
     </div>
 
     <div class="action-bar" id="actionBar" style="display: none;">
-        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải Lại File Excel (.xlsx)</button>
+        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải File Excel (.xlsx)</button>
+        <button class="btn btn-blue" id="btnCopyJson">📋 Copy JSON Dữ Liệu Lọc</button>
     </div>
 
     <div class="info-grid" id="infoGrid" style="display: none;">
         <div class="info-box">
-            <div class="info-label">Tổng số dòng</div>
+            <div class="info-label">Dòng dữ liệu lọc</div>
             <div class="info-val" id="valRows">0</div>
         </div>
         <div class="info-box">
-            <div class="info-label">Số cột</div>
+            <div class="info-label">Số cột hiển thị</div>
             <div class="info-val" id="valCols">0</div>
         </div>
         <div class="info-box">
-            <div class="info-label">Tên file</div>
+            <div class="info-label">Tên file Excel</div>
             <div class="info-filename" id="valFileName">-</div>
         </div>
+    </div>
+
+    <div class="json-section" id="jsonSection" style="display: none;">
+        <div class="json-header">
+            <div class="json-title">
+                <span>📄 Dữ liệu JSON (Theo bộ lọc hiện tại)</span>
+            </div>
+            <button id="btnQuickCopy" style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
+                📋 Copy Tất Cả JSON
+            </button>
+        </div>
+        <textarea class="json-textarea" id="jsonPreview" readonly placeholder="Dữ liệu JSON đang được tạo..."></textarea>
     </div>
 </div>
 
@@ -233,6 +301,34 @@
         }
     }
 
+    function copyJsonData() {
+        if (!globalData || !globalData.excelData) {
+            showToast('Không có dữ liệu JSON để copy!');
+            return;
+        }
+        const jsonStr = JSON.stringify(globalData.excelData, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                showToast(`✓ Đã copy ${globalData.rows.length} dòng JSON dữ liệu lọc vào clipboard!`);
+            }).catch(() => {
+                fallbackCopy(jsonStr);
+            });
+        } else {
+            fallbackCopy(jsonStr);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const textarea = document.getElementById('jsonPreview');
+        if (textarea) {
+            textarea.select();
+            document.execCommand('copy');
+            showToast(`✓ Đã copy ${globalData.rows.length} dòng JSON vào clipboard!`);
+        } else {
+            prompt('Copy dữ liệu JSON:', text);
+        }
+    }
+
     function processPayload(payload) {
         if (hasProcessed) return;
         hasProcessed = true;
@@ -241,20 +337,51 @@
         const rows = payload.rows || [];
         const fileName = payload.fileName || 'Bao_cao_Looker_Studio.xlsx';
 
-        globalData = { headers, rows, fileName };
+        let excelData = payload.excelData;
+        if (!excelData || !Array.isArray(excelData) || excelData.length === 0) {
+            excelData = rows.map(row => {
+                let obj = {};
+                headers.forEach((h, i) => {
+                    const val = row[i];
+                    if (val === null || val === undefined) {
+                        obj[h] = '';
+                    } else {
+                        const sVal = String(val).trim();
+                        if (/^0\d+$/.test(sVal)) {
+                            obj[h] = sVal;
+                        } else if (typeof val === 'number') {
+                            obj[h] = val;
+                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
+                            obj[h] = Number(sVal);
+                        } else {
+                            obj[h] = String(val);
+                        }
+                    }
+                });
+                return obj;
+            });
+        }
+        globalData = { headers, rows, excelData, fileName };
 
         // Tự động tải Excel ngay
         const success = downloadExcelFile(headers, rows, fileName);
 
+        // Hiển thị JSON Preview
+        const jsonPreview = document.getElementById('jsonPreview');
+        if (jsonPreview) {
+            jsonPreview.value = JSON.stringify(excelData, null, 2);
+        }
+
         // Update giao diện UI
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
-        document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
+        document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu lọc đã sẵn sàng';
         document.getElementById('subtitle').textContent = success 
-            ? 'File Excel (.xlsx) đã được lưu vào thư mục Downloads của bạn.'
-            : 'Vui lòng bấm nút Tải File Excel bên dưới.';
+            ? 'File Excel đã lưu vào máy. Bạn cũng có thể bấm Copy JSON bên dưới để lấy dữ liệu lọc.'
+            : 'Vui lòng bấm nút Tải File Excel hoặc Copy JSON bên dưới.';
 
         document.getElementById('actionBar').style.display = 'flex';
         document.getElementById('infoGrid').style.display = 'grid';
+        document.getElementById('jsonSection').style.display = 'block';
 
         document.getElementById('valRows').textContent = rows.length.toLocaleString('vi-VN');
         document.getElementById('valCols').textContent = headers.length;
@@ -265,7 +392,7 @@
     window.addEventListener('message', function(event) {
         const data = event.data;
         if (!data) return;
-        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows) {
+        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows || data.excelData) {
             processPayload(data);
         }
     });
@@ -276,6 +403,10 @@
         downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName);
         showToast('📥 Đang tải file Excel (.xlsx)...');
     });
+
+    // Nút Copy JSON
+    document.getElementById('btnCopyJson').addEventListener('click', copyJsonData);
+    document.getElementById('btnQuickCopy').addEventListener('click', copyJsonData);
 </script>
 </body>
 </html>

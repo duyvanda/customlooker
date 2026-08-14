@@ -1280,20 +1280,29 @@ function renderTable() {
 
                 const rowsToExport = sortedRows.length > 0 ? sortedRows : rawRows;
 
-                const excelRows = rowsToExport.map((row, rIdx) => {
+                const excelRows = [];
+                const excelDataObjects = [];
+
+                rowsToExport.forEach((row, rIdx) => {
                     const rowData = [];
-                    if (showSTT) rowData.push(rIdx + 1);
+                    const rowObj = {};
+                    if (showSTT) {
+                        rowData.push(rIdx + 1);
+                        rowObj['STT'] = rIdx + 1;
+                    }
                     visibleColumns.forEach(c => {
                         const val = row ? row[c.rawIndex] : '';
+                        let formattedVal = val;
                         if (val === null || val === undefined) {
-                            rowData.push('');
+                            formattedVal = '';
                         } else if (isDateValue(val, c.type)) {
-                            rowData.push(formatDateValue(val, 'date'));
-                        } else {
-                            rowData.push(val);
+                            formattedVal = formatDateValue(val, 'date');
                         }
+                        rowData.push(formattedVal);
+                        rowObj[c.name] = formattedVal;
                     });
-                    return rowData;
+                    excelRows.push(rowData);
+                    excelDataObjects.push(rowObj);
                 });
 
                 const todayStr = new Date().toISOString().slice(0, 10);
@@ -1303,6 +1312,7 @@ function renderTable() {
                     type: 'EXCEL_DOWNLOAD',
                     headers: exportHeaders,
                     rows: excelRows,
+                    excelData: excelDataObjects,
                     fileName: fileName
                 });
 
