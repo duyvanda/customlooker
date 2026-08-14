@@ -284,7 +284,6 @@ function extractSearchColumns(currentData, tableColumns) {
         }
     }
 
-    // Mặc định nếu không chọn searchFields: tìm trên tất cả các cột của bảng
     return tableColumns;
 }
 
@@ -344,7 +343,7 @@ function extractSetupConditionalRules(currentData, styleConfig) {
         const enabled = styleConfig[`rule${i}_enable`] && styleConfig[`rule${i}_enable`].value === true;
         if (!enabled) continue;
 
-        const boundField = allSetupCond[i - 1]; // Setup mapping: Rule 1 -> Field 1, Rule 2 -> Field 2...
+        const boundField = allSetupCond[i - 1];
         let rawIdx = -1;
         let fieldName = '*';
 
@@ -360,7 +359,7 @@ function extractSetupConditionalRules(currentData, styleConfig) {
 
         rules.push({
             ruleIndex: i,
-            rawIndex: rawIdx, // -1 nếu áp dụng tất cả các cột
+            rawIndex: rawIdx,
             fieldName: fieldName,
             operator: operator,
             value: value,
@@ -427,7 +426,7 @@ function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
         }
 
         if (matched) {
-            return rule.style; // First matching rule wins
+            return rule.style;
         }
     }
 
@@ -471,6 +470,56 @@ function formatTableCell(rawIdx, val, rules, fieldType = '') {
     }
 
     return formattedVal;
+}
+
+// HÀM TÍNH TOÁN LEFT OFFSET VÀ CỐ ĐỊNH CỘT (STICKY FROZEN COLUMNS)
+function applyFrozenColumnOffsets(table, showSTT) {
+    if (!table) return;
+    try {
+        const theadRow = table.querySelector('thead tr');
+        if (!theadRow) return;
+        const thList = Array.from(theadRow.children);
+        const tbodyRows = Array.from(table.querySelectorAll('tbody tr'));
+
+        let leftOffset = 0;
+        let lastFrozenColIdx = -1;
+
+        thList.forEach((th, colIdx) => {
+            if (th.classList.contains('frozen-column')) {
+                const width = th.getBoundingClientRect().width || th.offsetWidth;
+                th.style.left = `${leftOffset}px`;
+
+                tbodyRows.forEach(row => {
+                    const td = row.children[colIdx];
+                    if (td) {
+                        td.style.left = `${leftOffset}px`;
+                    }
+                });
+
+                leftOffset += width;
+                lastFrozenColIdx = colIdx;
+            }
+        });
+
+        // Đánh dấu cột frozen cuối cùng để tạo đường ranh giới đổ bóng đẹp mắt
+        thList.forEach((th, colIdx) => {
+            if (colIdx === lastFrozenColIdx) {
+                th.classList.add('frozen-column-last');
+                tbodyRows.forEach(row => {
+                    const td = row.children[colIdx];
+                    if (td) td.classList.add('frozen-column-last');
+                });
+            } else {
+                th.classList.remove('frozen-column-last');
+                tbodyRows.forEach(row => {
+                    const td = row.children[colIdx];
+                    if (td) td.classList.remove('frozen-column-last');
+                });
+            }
+        });
+    } catch (e) {
+        console.warn('[ExcelViz] applyFrozenColumnOffsets error:', e);
+    }
 }
 
 // HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (TỰ KHÔI PHỤC KHI F5)
@@ -568,10 +617,16 @@ function renderTable() {
 
         // 1. TRÍCH XUẤT CÁC CỘT BẢNG TỪ SETUP
         const styleConfig = currentData.style || {};
+        const fields = currentData.fields || {};
         const tableColumns = extractTableColumns(currentData);
         const searchColumns = extractSearchColumns(currentData, tableColumns);
         const setupSortLevels = extractSetupSortConfig(currentData, styleConfig);
         const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig);
+
+        // Trích xuất danh sách field cần Cố định cột (Freeze Columns) từ Setup
+        const freezeDims = Array.isArray(fields.freezeDimensions) ? fields.freezeDimensions : [];
+        const freezeMets = Array.isArray(fields.freezeMetrics) ? fields.freezeMetrics : [];
+        const freezeFieldIds = new Set([...freezeDims, ...freezeMets].map(f => f.id));
 
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
@@ -592,6 +647,11 @@ function renderTable() {
 
         // 2. XÁC ĐỊNH VISIBLE COLUMNS
         const visibleColumns = tableColumns.filter(c => !runtimeState.hiddenColumns.has(c.fieldId) && !runtimeState.hiddenColumns.has(c.name));
+
+        // Đánh dấu trạng thái Freeze cho từng cột
+        visibleColumns.forEach(col => {
+            col.isFrozen = freezeFieldIds.has(col.fieldId);
+        });
 
         // 3. RAW DATA
         const rawRows = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.rows))
@@ -715,8 +775,8 @@ function renderTable() {
             `;
 
             let autoPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) || 'Tìm kiếm...';
-            if (currentData.fields && currentData.fields.searchFields && currentData.fields.searchFields.length > 0) {
-                const searchNames = currentData.fields.searchFields.map(f => f.name || f.id);
+            if (fields.searchFields && fields.searchFields.length > 0) {
+                const searchNames = fields.searchFields.map(f => f.name || f.id);
                 autoPlaceholder = searchNames.length <= 3 ? `Tìm theo: ${searchNames.join(', ')}...` : `Tìm theo ${searchNames.length} cột đã chọn...`;
             }
 
@@ -779,7 +839,7 @@ function renderTable() {
 
         if (showSTT) {
             const sttTh = document.createElement('th');
-            sttTh.className = 'cell-stt';
+            sttTh.className = 'cell-stt frozen-column';
             sttTh.style.cursor = 'default';
             sttTh.innerText = 'STT';
             headerRow.appendChild(sttTh);
@@ -787,8 +847,8 @@ function renderTable() {
 
         visibleColumns.forEach((col) => {
             const th = document.createElement('th');
-            
-            // Kiểm tra trạng thái sort hiện tại
+            if (col.isFrozen) th.classList.add('frozen-column');
+
             let isSorted = false;
             let sortDir = 'asc';
 
@@ -803,7 +863,7 @@ function renderTable() {
                 }
             }
 
-            if (isSorted) th.className = 'th-sorted';
+            if (isSorted) th.classList.add('th-sorted');
 
             let icon = '↕';
             if (isSorted) {
@@ -850,21 +910,22 @@ function renderTable() {
 
                 if (showSTT) {
                     const sttTd = document.createElement('td');
-                    sttTd.className = 'cell-stt';
+                    sttTd.className = 'cell-stt frozen-column';
                     sttTd.innerText = startIdx + rIdx + 1;
                     tr.appendChild(sttTd);
                 }
 
                 visibleColumns.forEach((col) => {
                     const td = document.createElement('td');
-                    const rawVal = row[col.rawIndex];
+                    if (col.isFrozen) td.classList.add('frozen-column');
 
+                    const rawVal = row[col.rawIndex];
                     const isDate = isDateValue(rawVal, col.type);
                     const isNum = !isDate && isNumericValue(rawVal, col.type);
 
-                    if (isNum) td.className = 'align-right';
-                    else if (isDate) td.className = 'align-center';
-                    else td.className = 'align-left';
+                    if (isNum) td.classList.add('align-right');
+                    else if (isDate) td.classList.add('align-center');
+                    else td.classList.add('align-left');
 
                     if (textWrap) td.classList.add('text-wrap-cell');
 
@@ -983,6 +1044,10 @@ function renderTable() {
         wrapper.appendChild(paginationFooter);
 
         appRoot.appendChild(wrapper);
+
+        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS
+        applyFrozenColumnOffsets(table, showSTT);
+        setTimeout(() => applyFrozenColumnOffsets(table, showSTT), 50);
 
         // KHÔI PHỤC FOCUS Ô SEARCH
         if (wasFocused) {

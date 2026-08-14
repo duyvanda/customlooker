@@ -1,243 +1,231 @@
-Đúng, **một chỗ có thể chọn nhiều field**. Em sửa lại plan Search như sau:
+Có. Với **Freeze Column**, em đề xuất cũng cho editor chọn field ở **Setup**, không lưu runtime.
 
 ### `index.json`
 
-Chỉ cần **1 element**:
-
-```json
-{
-  "id": "searchFields",
-  "label": "Search columns",
-  "type": "DIMENSION",
-  "options": {
-    "min": 0,
-    "max": 10
-  }
-}
-```
-
-`max` là số dimension tối đa editor được chọn trong cùng một ô Setup. Looker Studio hỗ trợ `min/max` cho `DIMENSION` và sẽ trả lại toàn bộ field đã chọn dưới cùng `configId`. ([Google for Developers][1])
-
-Setup sẽ thành:
+Thêm một nhóm Setup:
 
 ```text
-SEARCH COLUMNS
-[ Employee Name ]
-[ Email         ]
-[ Department    ]
+FREEZE COLUMNS
+
+Freeze dimensions
+[ Employee ]
+[ Department ]
 [ + Add dimension ]
+
+Freeze metrics
+[ Revenue ]
+[ + Add metric ]
 ```
 
-JS đọc:
+Do Looker không có generic `FIELD`, implementation dùng 2 selector:
+
+```text
+freezeDimensions   max: 5
+freezeMetrics      max: 5
+```
+
+JS gom lại theo `field.id`, nhưng **giữ thứ tự thật của Table Data**, không theo thứ tự hai selector.
+
+Ví dụ Table:
+
+```text
+Employee | Department | Email | Revenue | KPI
+```
+
+Setup chọn:
+
+```text
+Freeze dimensions:
+Employee
+Department
+
+Freeze metrics:
+Revenue
+```
+
+Thì frozen fields:
+
+```text
+Employee
+Department
+Revenue
+```
+
+theo thứ tự chúng xuất hiện trong table.
+
+---
+
+### `src/index.js`
+
+Thêm resolver:
 
 ```js
-const searchFields =
-    data.fields?.searchFields || [];
+const freezeFieldIds = new Set([
+    ...(data.fields?.freezeDimensions || []),
+    ...(data.fields?.freezeMetrics || [])
+].map(f => f.id));
 ```
 
-Rồi lấy các `field.id` đó để search.
+Khi render header/cell:
 
-### Vậy Search không cần:
-
-```text
-searchSetupC1
-searchSetupC2
-searchSetupC3
-```
-
-Chỉ còn:
-
-```text
-searchFields[]
-```
-
-gọn hơn nhiều.
-
-### Sort thì vẫn khác
-
-Sort chỉ cần **1 field**, nên:
-
-```text
-sortDimension max: 1
-sortMetric    max: 1
-```
-
-hoặc nếu chỉ sort metric thì một `sortMetric` là đủ.
-
-### Conditional
-
-Conditional cũng có thể cho editor chọn nhiều field trong **một Setup element**:
-
-```json
-{
-  "id": "conditionalFields",
-  "label": "Conditional formatting fields",
-  "type": "METRIC",
-  "options": {
-    "min": 0,
-    "max": 5
-  }
+```js
+if (freezeFieldIds.has(column.fieldId)) {
+    th.classList.add('frozen-column');
+    td.classList.add('frozen-column');
 }
 ```
 
-Sau đó mapping theo thứ tự:
+Nhưng cần tính `left` động:
 
 ```text
-conditionalFields[0] → Style Rule 1
-conditionalFields[1] → Style Rule 2
-conditionalFields[2] → Style Rule 3
-...
+Column frozen 1 → left: 0
+Column frozen 2 → left: width(column 1)
+Column frozen 3 → left: width(1) + width(2)
 ```
 
-Cách này gọn hơn hẳn `cfSetupC1`, `cfSetupC2`...
+Tạo helper kiểu:
 
-**Em chốt lại:** Search nên là **1 selector multi-field**, Conditional cũng nên cân nhắc **1 selector multi-field**, còn Sort là **1 selector single-field**.
+```js
+applyFrozenColumnOffsets();
+```
 
-[1]: https://developers.google.com/looker-studio/visualization/config-reference?utm_source=chatgpt.com "Community Visualization Config Reference  |  Community Visualizations  |  Google for Developers"
+chạy sau khi table render.
 
-Sort chỉ cần 3 field bạn ơi.
+Nên dùng `ResizeObserver` để khi Looker resize chart hoặc width cột thay đổi thì tính lại offset.
 
-Đúng. Vậy chốt **Sort tối đa 3 field**, theo thứ tự ưu tiên.
+---
 
-### Sort — Setup
+### `index.css`
 
-Nếu 3 field đều cùng loại, dùng **1 selector multi-field**:
+Thêm sticky:
 
-```json
-{
-  "id": "sortFields",
-  "label": "Sort columns",
-  "type": "METRIC",
-  "options": {
-    "min": 0,
-    "max": 3
-  }
+```css
+.frozen-column {
+    position: sticky;
+    z-index: 3;
+    background: inherit;
 }
 ```
 
-Editor chọn:
+Header frozen cần cao hơn:
 
-```text
-SORT COLUMNS
-
-Revenue
-KPI %
-Target
-+ Add metric
+```css
+thead .frozen-column {
+    z-index: 6;
+}
 ```
 
-Thứ tự chính là priority:
+Cell giao giữa **sticky header + frozen column** phải có z-index cao nhất để không bị đè.
 
-```text
-sortFields[0] → Sort 1
-sortFields[1] → Sort 2
-sortFields[2] → Sort 3
+Có thể thêm shadow ở cột frozen cuối:
+
+```css
+.frozen-column-last {
+    box-shadow: 4px 0 6px rgba(0,0,0,.08);
+}
 ```
+
+để nhìn rõ ranh giới vùng freeze.
+
+---
+
+### Behavior với Hide Column
+
+Freeze lấy theo `field.id`, nên runtime hide không làm lệch.
 
 Ví dụ:
 
 ```text
-1. Revenue DESC
-2. KPI % DESC
-3. Target ASC
+Freeze:
+Employee
+Department
+Revenue
 ```
 
-### Style
-
-Chỉ cần direction cho 3 cấp:
+Viewer hide Department:
 
 ```text
-SORTING
-
-Sort 1 direction
-[ DESC ▼ ]
-
-Sort 2 direction
-[ DESC ▼ ]
-
-Sort 3 direction
-[ ASC ▼ ]
-
-Allow header sorting
-☑
+Employee | Revenue
 ```
 
-JS:
-
-```js
-const sortFields = data.fields?.sortFields || [];
-
-const sortConfig = [
-    {
-        field: sortFields[0],
-        direction: data.style.sort1Direction?.value || 'asc'
-    },
-    {
-        field: sortFields[1],
-        direction: data.style.sort2Direction?.value || 'asc'
-    },
-    {
-        field: sortFields[2],
-        direction: data.style.sort3Direction?.value || 'asc'
-    }
-].filter(item => item.field);
-```
-
-Sort engine:
+thì offset tự tính lại:
 
 ```text
-Revenue bằng nhau
-      ↓
-so KPI
-      ↓
-KPI bằng nhau
-      ↓
-so Target
+Employee → left 0
+Revenue  → left width(Employee)
 ```
 
-### Runtime Option B vẫn giữ
+Department vẫn nằm trong Setup nhưng vì đang hidden nên không tham gia render/freeze.
+
+F5:
 
 ```text
-Setup:
-Revenue DESC
-KPI DESC
-Target ASC
-        ↓
-default multi-sort
-
-User click Employee
-        ↓
-Employee ASC     ← temporary override
-
-click Employee lần 2
-        ↓
-Employee DESC
-
-click lần 3
-        ↓
-clear override
-        ↓
-quay về:
-Revenue DESC
-KPI DESC
-Target ASC
+hidden state reset
+→ Department hiện lại
+→ freeze lại tự động
 ```
 
-F5 cũng quay về 3 sort field từ Setup.
+---
 
-**Lưu ý duy nhất:** nếu Sort cần trộn cả `Dimension + Metric`, Looker không có generic `FIELD`, nên implementation phải xử lý riêng. Còn nếu 3 field Sort của mình là Metric thì **1 selector `sortFields`, `max: 3` là đẹp nhất**.
+### Một rule em khuyên áp dụng
 
-Vậy structure hiện tại chốt:
+**Không di chuyển column khi freeze.**
+
+Nếu Table Data là:
+
+```text
+Employee | Email | Department | Revenue
+```
+
+và editor chọn freeze:
+
+```text
+Employee
+Department
+```
+
+thì vẫn giữ thứ tự table:
+
+```text
+Employee | Email | Department | Revenue
+```
+
+chỉ Employee + Department có sticky behavior.
+
+Nếu muốn UX giống Excel hơn, tốt nhất editor nên đặt các cột muốn freeze về bên trái ngay trong **Setup Table Data**.
+
+---
+
+### Các file cần sửa
+
+| File              | Modify                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| `index.json`      | thêm `freezeDimensions`, `freezeMetrics` trong Setup                   |
+| `src/index.js`    | resolve frozen field IDs + tính `left` sticky + recalc khi resize/hide |
+| `index.css`       | sticky column, z-index, shadow                                         |
+| `index.bundle.js` | build lại, không sửa tay                                               |
+| `manifest.json`   | không đổi                                                              |
+
+Vậy tổng architecture đang chốt sẽ là:
 
 ```text
 SEARCH
-→ 1 selector, nhiều fields
+→ Setup: 1 multi-select
 
 SORT
-→ 1 selector, tối đa 3 fields
+→ Setup: 1 multi-select, max 3
 
 CONDITIONAL
-→ 1 selector, tối đa 5 fields
+→ Setup: 1 multi-select, max 5
+
+FREEZE
+→ Setup: chọn các field cần freeze
+
+STYLE
+→ chỉ behavior / màu / direction / rule
+
+RUNTIME
+→ search text, header-sort override, hide column, pagination
 ```
 
-Style chỉ cấu hình behavior của các field đã chọn ở Setup.
+Freeze cũng **không cần bất kỳ storage/persistence custom nào**.

@@ -210,6 +210,7 @@ html, body {
     border-radius: 6px;
     background: #ffffff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    position: relative;
 }
 
 .table-scroll-container::-webkit-scrollbar {
@@ -232,7 +233,8 @@ html, body {
 
 /* DATA TABLE BASE - CRISP, HIGH CONTRAST & CLEAR */
 .preview-table {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     width: 100%;
     text-align: left;
     color: #0f172a;
@@ -289,18 +291,19 @@ html, body {
     color: #0f172a;
     font-weight: 500;
     line-height: 1.45;
+    background-color: #ffffff;
 }
 
 .preview-table tbody tr {
     transition: background-color 0.1s ease;
 }
 
-.preview-table tbody tr:hover {
+.preview-table tbody tr:hover td {
     background-color: #f1f5f9 !important;
 }
 
 /* TABLE VARIANTS */
-.table-striped tbody tr:nth-child(even) {
+.table-striped tbody tr:nth-child(even) td {
     background-color: #f8fafc;
 }
 
@@ -308,8 +311,33 @@ html, body {
     border: 1px solid #cbd5e1;
 }
 
-.table-default tbody tr {
-    background-color: #ffffff;
+/* FROZEN COLUMNS (STICKY CỐ ĐỊNH CỘT) */
+.frozen-column {
+    position: sticky !important;
+    z-index: 4;
+}
+
+thead th.frozen-column {
+    position: sticky !important;
+    z-index: 14 !important;
+    background-color: #f8fafc !important;
+}
+
+.table-striped tbody tr:nth-child(even) td.frozen-column {
+    background-color: #f8fafc !important;
+}
+
+.table-striped tbody tr:nth-child(odd) td.frozen-column {
+    background-color: #ffffff !important;
+}
+
+tbody tr:hover td.frozen-column {
+    background-color: #f1f5f9 !important;
+}
+
+.frozen-column-last {
+    border-right: 2px solid #94a3b8 !important;
+    box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.12);
 }
 
 /* ROW DENSITIES */
@@ -364,6 +392,7 @@ html, body {
     font-size: 12px;
     font-weight: 600;
     width: 44px;
+    min-width: 44px;
     user-select: none;
 }
 
@@ -508,7 +537,7 @@ html, body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* MODAL TÙY CHỈNH CỘT (KÉO LÊN TRÊN CÙNG & RAZOR SHARP) */
+/* MODAL TÙY CHỈNH CỘT */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -528,9 +557,9 @@ html, body {
     background: #ffffff;
     border-radius: 8px;
     width: 94vw;
-    max-width: 1050px;
+    max-width: 520px;
     max-height: 96vh;
-    margin-top: 4px;
+    margin-top: 20px;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
@@ -546,36 +575,6 @@ html, body {
     justify-content: space-between;
     background: #f8fafc;
     flex-shrink: 0;
-}
-
-.modal-nav-tabs {
-    display: flex;
-    gap: 8px;
-}
-
-.modal-tab-btn {
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 5px 12px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #475569;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    font-family: inherit;
-}
-
-.modal-tab-btn:hover {
-    color: #000000;
-    background: #f1f5f9;
-}
-
-.modal-tab-btn.active {
-    background: #ffffff;
-    color: var(--primary);
-    border-color: #94a3b8;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .modal-close-btn {
@@ -612,7 +611,6 @@ html, body {
     flex-shrink: 0;
 }
 
-/* TABLES IN MODAL - CRISP BLACK AND SHARP */
 .col-config-table {
     width: 100%;
     border-collapse: collapse;
@@ -630,7 +628,7 @@ html, body {
 }
 
 .col-config-table td {
-    padding: 5px 8px;
+    padding: 6px 8px;
     border-bottom: 1px solid #cbd5e1;
     vertical-align: middle;
     color: #000000;
@@ -638,45 +636,6 @@ html, body {
 
 .col-config-table tr:hover {
     background-color: #f8fafc;
-}
-
-.col-config-input, .col-config-select {
-    width: 100%;
-    border: 1px solid #94a3b8;
-    background: #ffffff;
-    border-radius: 5px;
-    padding: 5px 7px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #000000;
-    outline: none;
-    font-family: inherit;
-}
-
-.col-config-input:focus, .col-config-select:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.2);
-}
-
-.btn-move {
-    background: #ffffff;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    padding: 3px 6px;
-    font-size: 10.5px;
-    cursor: pointer;
-    color: #000000;
-    font-weight: 700;
-}
-
-.btn-move:hover:not(:disabled) {
-    background: #f1f5f9;
-    border-color: #475569;
-}
-
-.btn-move:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
 }
 
 .btn-modal-save {
@@ -697,24 +656,6 @@ html, body {
     background: var(--primary-hover);
 }
 
-.btn-modal-cancel {
-    background: #ffffff;
-    border: 1px solid #94a3b8;
-    color: #000000;
-    padding: 7px 16px;
-    border-radius: 6px;
-    font-size: 12.5px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s ease;
-}
-
-.btn-modal-cancel:hover {
-    background: #f1f5f9;
-    border-color: #475569;
-}
-
 .btn-modal-reset {
     background: #ffffff;
     border: 1px solid #94a3b8;
@@ -732,88 +673,4 @@ html, body {
     background: #fee2e2;
     color: var(--accent-red);
     border-color: #fca5a5;
-}
-
-.btn-add-rule {
-    background: #f0fdf4;
-    border: 1px dashed #15803d;
-    color: #15803d;
-    font-weight: 700;
-    font-size: 12px;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-family: inherit;
-    transition: all 0.15s ease;
-}
-
-.btn-add-rule:hover {
-    background: #dcfce7;
-}
-
-.btn-del-rule {
-    background: none;
-    border: none;
-    color: var(--accent-red);
-    font-size: 14px;
-    cursor: pointer;
-    padding: 3px 5px;
-    border-radius: 4px;
-}
-
-.btn-del-rule:hover {
-    background: #fee2e2;
-}
-
-/* MODAL PAGINATION */
-.modal-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid #e2e8f0;
-    font-size: 12px;
-    color: #475569;
-    font-weight: 600;
-}
-
-.modal-page-controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.modal-page-btn {
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #0f172a;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-.modal-page-btn:hover:not(:disabled) {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-}
-
-.modal-page-btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-
-.modal-page-btn.active {
-    background: var(--primary);
-    color: #ffffff;
-    border-color: var(--primary);
 }
