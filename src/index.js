@@ -227,6 +227,57 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
+// HÀM TRÍCH XUẤT THÔNG TIN CÁC PHẦN LỌC HIỆN TẠI (DateRange, Search, Dimension Values)
+function extractActiveFilterInfo(currentData, activeRows, runtimeState) {
+    const filterInfo = {};
+
+    // 1. Date Range từ Looker Studio
+    if (currentData && currentData.dateRanges) {
+        const defaultDr = currentData.dateRanges.DEFAULT;
+        if (defaultDr) {
+            const s = defaultDr.start ? formatDateValue(defaultDr.start, 'date_yymmdd') : null;
+            const e = defaultDr.end ? formatDateValue(defaultDr.end, 'date_yymmdd') : null;
+            filterInfo.dateRange = {
+                startDate: s || defaultDr.start || null,
+                endDate: e || defaultDr.end || null
+            };
+        }
+    }
+
+    // 2. Search keyword (nếu có)
+    if (runtimeState && runtimeState.searchText && runtimeState.searchText.trim() !== '') {
+        filterInfo.searchKeyword = runtimeState.searchText.trim();
+    }
+
+    // 3. Danh sách giá trị của các Dimension đang được hiển thị / lọc
+    const fields = currentData ? (currentData.fields || {}) : {};
+    const dims = Array.isArray(fields.dimensions) ? fields.dimensions : [];
+    const allHeaders = (currentData && currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
+        ? currentData.tables.DEFAULT.headers
+        : [];
+
+    const dimensionValues = {};
+    dims.forEach(dim => {
+        if (!dim) return;
+        const rawIdx = findRawIndexForField(dim, allHeaders);
+        if (rawIdx !== -1) {
+            const uniqueVals = Array.from(new Set(
+                activeRows
+                    .map(r => r ? r[rawIdx] : null)
+                    .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+                    .map(v => String(v).trim())
+            ));
+            dimensionValues[dim.name || dim.id] = uniqueVals;
+        }
+    });
+
+    if (Object.keys(dimensionValues).length > 0) {
+        filterInfo.dimensions = dimensionValues;
+    }
+
+    return filterInfo;
+}
+
 // HÀM SO SÁNH DỮ LIỆU ĐA KIỂU (Natural Sort)
 function compareValues(a, b, fieldType = '') {
     if (a === b) return 0;
@@ -1307,12 +1358,14 @@ function renderTable() {
 
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
+                const filterInfo = extractActiveFilterInfo(currentData, rowsToExport, runtimeState);
 
                 downloadViaHelper({
                     type: 'EXCEL_DOWNLOAD',
                     headers: exportHeaders,
                     rows: excelRows,
                     excelData: excelDataObjects,
+                    filterInfo: filterInfo,
                     fileName: fileName
                 });
 

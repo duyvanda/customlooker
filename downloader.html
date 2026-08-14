@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xuất Dữ Liệu & Copy JSON</title>
+    <title>Xuất File Excel & Bộ Lọc</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -63,7 +63,7 @@
         
         .action-bar {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
@@ -71,7 +71,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 11px 20px;
+            padding: 11px 18px;
             border-radius: 8px;
             font-weight: 600;
             font-size: 13.5px;
@@ -94,6 +94,13 @@
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
         .btn-blue:hover { background: #0369a1; }
+
+        .btn-purple {
+            background: #6366f1;
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        .btn-purple:hover { background: #4f46e5; }
         
         .info-grid {
             display: grid;
@@ -111,20 +118,20 @@
         .info-val { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px; }
         .info-filename { font-size: 12.5px; font-weight: 600; color: #0f172a; margin-top: 3px; word-break: break-word; }
 
-        /* JSON CONTAINER */
-        .json-section {
+        /* FILTER PARAMS SECTION */
+        .filter-section {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 10px;
             padding: 14px;
         }
-        .json-header {
+        .filter-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 8px;
         }
-        .json-title {
+        .filter-title {
             font-size: 12.5px;
             font-weight: 700;
             color: #334155;
@@ -132,20 +139,20 @@
             align-items: center;
             gap: 6px;
         }
-        .json-textarea {
+        .filter-textarea {
             width: 100%;
-            height: 140px;
+            height: 120px;
             background: #ffffff;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             padding: 10px;
             font-family: 'Consolas', 'JetBrains Mono', 'Courier New', monospace;
-            font-size: 11.5px;
+            font-size: 12px;
             color: #0f172a;
             resize: vertical;
             outline: none;
         }
-        .json-textarea:focus {
+        .filter-textarea:focus {
             border-color: #0284c7;
         }
 
@@ -180,13 +187,14 @@
     </div>
 
     <div class="action-bar" id="actionBar" style="display: none;">
-        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải File Excel (.xlsx)</button>
-        <button class="btn btn-blue" id="btnCopyJson">📋 Copy JSON Dữ Liệu Lọc</button>
+        <button class="btn btn-green" id="btnDownloadExcel">📥 Tải Lại Excel (.xlsx)</button>
+        <button class="btn btn-blue" id="btnCopyFilterJson">📋 Copy JSON Bộ Lọc</button>
+        <button class="btn btn-purple" id="btnCopyFilterText">📝 Copy Text Bộ Lọc</button>
     </div>
 
     <div class="info-grid" id="infoGrid" style="display: none;">
         <div class="info-box">
-            <div class="info-label">Dòng dữ liệu lọc</div>
+            <div class="info-label">Tổng số dòng</div>
             <div class="info-val" id="valRows">0</div>
         </div>
         <div class="info-box">
@@ -199,16 +207,16 @@
         </div>
     </div>
 
-    <div class="json-section" id="jsonSection" style="display: none;">
-        <div class="json-header">
-            <div class="json-title">
-                <span>📄 Dữ liệu JSON (Theo bộ lọc hiện tại)</span>
+    <div class="filter-section" id="filterSection" style="display: none;">
+        <div class="filter-header">
+            <div class="filter-title">
+                <span>🎯 Giá trị các phần lọc (startDate, endDate, Dimension values)</span>
             </div>
-            <button id="btnQuickCopy" style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
-                📋 Copy Tất Cả JSON
+            <button id="btnQuickCopyFilter" style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
+                📋 Copy
             </button>
         </div>
-        <textarea class="json-textarea" id="jsonPreview" readonly placeholder="Dữ liệu JSON đang được tạo..."></textarea>
+        <textarea class="filter-textarea" id="filterPreview" readonly placeholder="Thông tin bộ lọc đang được tổng hợp..."></textarea>
     </div>
 </div>
 
@@ -301,31 +309,64 @@
         }
     }
 
-    function copyJsonData() {
-        if (!globalData || !globalData.excelData) {
-            showToast('Không có dữ liệu JSON để copy!');
+    function getFilterInfoJsonString() {
+        if (!globalData || !globalData.filterInfo) return '{}';
+        return JSON.stringify(globalData.filterInfo, null, 2);
+    }
+
+    function getFilterInfoTextString() {
+        if (!globalData || !globalData.filterInfo) return '';
+        const fi = globalData.filterInfo;
+        const parts = [];
+
+        if (fi.dateRange) {
+            if (fi.dateRange.startDate && fi.dateRange.endDate) {
+                parts.push(`startdate=${fi.dateRange.startDate} and enddate=${fi.dateRange.endDate}`);
+            } else if (fi.dateRange.startDate) {
+                parts.push(`startdate=${fi.dateRange.startDate}`);
+            }
+        }
+
+        if (fi.searchKeyword) {
+            parts.push(`search="${fi.searchKeyword}"`);
+        }
+
+        if (fi.dimensions && typeof fi.dimensions === 'object') {
+            Object.entries(fi.dimensions).forEach(([dimName, vals]) => {
+                if (Array.isArray(vals) && vals.length > 0) {
+                    parts.push(`${dimName}=${vals.join(',')}`);
+                }
+            });
+        }
+
+        return parts.join(' and ');
+    }
+
+    function copyToClipboard(text, successMsg) {
+        if (!text) {
+            showToast('Không có thông tin bộ lọc để copy!');
             return;
         }
-        const jsonStr = JSON.stringify(globalData.excelData, null, 2);
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(jsonStr).then(() => {
-                showToast(`✓ Đã copy ${globalData.rows.length} dòng JSON dữ liệu lọc vào clipboard!`);
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(successMsg || '✓ Đã copy vào clipboard!');
             }).catch(() => {
-                fallbackCopy(jsonStr);
+                fallbackCopy(text, successMsg);
             });
         } else {
-            fallbackCopy(jsonStr);
+            fallbackCopy(text, successMsg);
         }
     }
 
-    function fallbackCopy(text) {
-        const textarea = document.getElementById('jsonPreview');
+    function fallbackCopy(text, successMsg) {
+        const textarea = document.getElementById('filterPreview');
         if (textarea) {
+            textarea.value = text;
             textarea.select();
             document.execCommand('copy');
-            showToast(`✓ Đã copy ${globalData.rows.length} dòng JSON vào clipboard!`);
+            showToast(successMsg || '✓ Đã copy vào clipboard!');
         } else {
-            prompt('Copy dữ liệu JSON:', text);
+            prompt('Copy thông tin bộ lọc:', text);
         }
     }
 
@@ -336,52 +377,29 @@
         const headers = payload.headers || [];
         const rows = payload.rows || [];
         const fileName = payload.fileName || 'Bao_cao_Looker_Studio.xlsx';
+        const filterInfo = payload.filterInfo || {};
 
-        let excelData = payload.excelData;
-        if (!excelData || !Array.isArray(excelData) || excelData.length === 0) {
-            excelData = rows.map(row => {
-                let obj = {};
-                headers.forEach((h, i) => {
-                    const val = row[i];
-                    if (val === null || val === undefined) {
-                        obj[h] = '';
-                    } else {
-                        const sVal = String(val).trim();
-                        if (/^0\d+$/.test(sVal)) {
-                            obj[h] = sVal;
-                        } else if (typeof val === 'number') {
-                            obj[h] = val;
-                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
-                            obj[h] = Number(sVal);
-                        } else {
-                            obj[h] = String(val);
-                        }
-                    }
-                });
-                return obj;
-            });
-        }
-        globalData = { headers, rows, excelData, fileName };
+        globalData = { headers, rows, fileName, filterInfo };
 
         // Tự động tải Excel ngay
         const success = downloadExcelFile(headers, rows, fileName);
 
-        // Hiển thị JSON Preview
-        const jsonPreview = document.getElementById('jsonPreview');
-        if (jsonPreview) {
-            jsonPreview.value = JSON.stringify(excelData, null, 2);
+        // Hiển thị Filter Preview JSON
+        const filterPreview = document.getElementById('filterPreview');
+        if (filterPreview) {
+            filterPreview.value = getFilterInfoJsonString();
         }
 
         // Update giao diện UI
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
-        document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu lọc đã sẵn sàng';
+        document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
         document.getElementById('subtitle').textContent = success 
-            ? 'File Excel đã lưu vào máy. Bạn cũng có thể bấm Copy JSON bên dưới để lấy dữ liệu lọc.'
-            : 'Vui lòng bấm nút Tải File Excel hoặc Copy JSON bên dưới.';
+            ? 'File Excel đã lưu vào máy. Bạn có thể copy nhanh giá trị bộ lọc bên dưới.'
+            : 'Vui lòng bấm nút Tải Lại Excel bên dưới.';
 
         document.getElementById('actionBar').style.display = 'flex';
         document.getElementById('infoGrid').style.display = 'grid';
-        document.getElementById('jsonSection').style.display = 'block';
+        document.getElementById('filterSection').style.display = 'block';
 
         document.getElementById('valRows').textContent = rows.length.toLocaleString('vi-VN');
         document.getElementById('valCols').textContent = headers.length;
@@ -392,7 +410,7 @@
     window.addEventListener('message', function(event) {
         const data = event.data;
         if (!data) return;
-        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows || data.excelData) {
+        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows) {
             processPayload(data);
         }
     });
@@ -404,9 +422,22 @@
         showToast('📥 Đang tải file Excel (.xlsx)...');
     });
 
-    // Nút Copy JSON
-    document.getElementById('btnCopyJson').addEventListener('click', copyJsonData);
-    document.getElementById('btnQuickCopy').addEventListener('click', copyJsonData);
+    // Nút Copy JSON Bộ Lọc
+    document.getElementById('btnCopyFilterJson').addEventListener('click', () => {
+        const jsonStr = getFilterInfoJsonString();
+        copyToClipboard(jsonStr, '✓ Đã copy JSON giá trị bộ lọc!');
+    });
+
+    // Nút Copy Text Bộ Lọc
+    document.getElementById('btnCopyFilterText').addEventListener('click', () => {
+        const textStr = getFilterInfoTextString();
+        copyToClipboard(textStr, '✓ Đã copy text giá trị bộ lọc!');
+    });
+
+    document.getElementById('btnQuickCopyFilter').addEventListener('click', () => {
+        const jsonStr = getFilterInfoJsonString();
+        copyToClipboard(jsonStr, '✓ Đã copy JSON giá trị bộ lọc!');
+    });
 </script>
 </body>
 </html>
