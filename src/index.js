@@ -312,7 +312,6 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
 
     const str = String(val).trim();
     const strFmt = String(colFmt || 'auto');
-    const strColor = String(colColor || 'default');
 
     const isDate = isDateValue(val, fieldType) || strFmt.startsWith('date');
     const isNum = !isDate && (isNumericValue(val, fieldType) || ['number_comma', 'number_vn', 'currency', 'percent'].includes(strFmt));
@@ -366,17 +365,6 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
                 : `<span class="color-pos-neg-pos">${formattedVal}</span>`;
         }
     }
-
-    // 3. MÀU CỘT CỐ ĐỊNH (Nếu chọn trong Modal)
-    if (strColor === 'pos_green_neg_red' && isNum) {
-        return num >= 0
-            ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
-            : `<span class="color-pos-neg-neg">${formattedVal}</span>`;
-    }
-    if (strColor === 'green') return `<span class="color-green">${formattedVal}</span>`;
-    if (strColor === 'red') return `<span class="color-red">${formattedVal}</span>`;
-    if (strColor === 'amber') return `<span class="color-amber">${formattedVal}</span>`;
-    if (strColor === 'cyan') return `<span class="color-cyan">${formattedVal}</span>`;
 
     return formattedVal;
 }
@@ -473,7 +461,6 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
             format: 'auto',
-            color: 'default',
             type: df.type || '',
             rawIndex: df.rawIndex
         }));
@@ -507,7 +494,6 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
                 format: 'auto',
-                color: 'default',
                 type: df.type || '',
                 rawIndex: df.rawIndex
             });
@@ -581,21 +567,20 @@ function openColumnConfigModal() {
                                     <tr>
                                         <th style="width:40px; text-align:center;">STT</th>
                                         <th style="width:70px; text-align:center;">Hiện</th>
-                                        <th style="width:170px;">Tên gốc Looker/BQ</th>
-                                        <th style="width:210px;">Tên hiển thị (Label)</th>
-                                        <th style="width:170px;">Định dạng (Format)</th>
-                                        <th style="width:160px;">Màu cột (Color)</th>
+                                        <th style="width:200px;">Tên gốc Looker/BQ</th>
+                                        <th style="width:250px;">Tên hiển thị (Label)</th>
+                                        <th style="width:200px;">Định dạng (Format)</th>
                                         <th style="width:90px; text-align:center;">Thứ tự</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${workingConfigs.map((col, idx) => `
                                         <tr>
-                                            <td style="text-align:center; color:#94a3b8; font-weight:600;">${idx + 1}</td>
+                                            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
                                             <td style="text-align:center;">
                                                 <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
                                             </td>
-                                            <td style="font-family:'JetBrains Mono',monospace; color:#475569; font-size:11px;">${col.field}</td>
+                                            <td style="font-family:'JetBrains Mono',monospace; color:#334155; font-size:11.5px; font-weight:600;">${col.field}</td>
                                             <td>
                                                 <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
                                             </td>
@@ -614,16 +599,6 @@ function openColumnConfigModal() {
                                                     <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
                                                 </select>
                                             </td>
-                                            <td>
-                                                <select class="col-config-select col-color-sel" data-idx="${idx}">
-                                                    <option value="default" ${col.color === 'default' ? 'selected' : ''}>Mặc định</option>
-                                                    <option value="pos_green_neg_red" ${col.color === 'pos_green_neg_red' ? 'selected' : ''}>Dương Xanh / Âm Đỏ</option>
-                                                    <option value="green" ${col.color === 'green' ? 'selected' : ''}>Xanh Lá (Green)</option>
-                                                    <option value="red" ${col.color === 'red' ? 'selected' : ''}>Đỏ (Red)</option>
-                                                    <option value="amber" ${col.color === 'amber' ? 'selected' : ''}>Vàng Cam (Amber)</option>
-                                                    <option value="cyan" ${col.color === 'cyan' ? 'selected' : ''}>Xanh Dương (Cyan)</option>
-                                                </select>
-                                            </td>
                                             <td style="text-align:center; white-space:nowrap;">
                                                 <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
                                                 <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
@@ -634,7 +609,7 @@ function openColumnConfigModal() {
                             </table>
                         ` : `
                             <div>
-                                <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
+                                <div style="font-size:12px; color:#475569; margin-bottom:10px; font-weight:500;">
                                     💡 Thiết lập quy tắc điều kiện động (<strong>chứa từ khóa, bằng, lớn hơn, nhỏ hơn, số âm/dương</strong>) để tự động đổi màu chữ hoặc gắn Thẻ Badge cho bất kỳ cột nào.
                                 </div>
                                 <table class="col-config-table">
@@ -707,8 +682,8 @@ function openColumnConfigModal() {
                     <div class="modal-footer">
                         <button class="btn-modal-reset" id="btn-reset-modal" title="Xóa toàn bộ cấu hình đã lưu và quay về mặc định">🔄 Khôi phục mặc định</button>
                         <div style="display:flex; gap:8px;">
-                            <button class="btn-modal-reset" id="btn-cancel-modal">Hủy bỏ</button>
-                            <button class="btn-modal-save" id="btn-save-modal">Lưu & Áp Dụng ✓</button>
+                            <button class="btn-modal-cancel" id="btn-cancel-modal">Hủy</button>
+                            <button class="btn-modal-save" id="btn-save-modal">Lưu</button>
                         </div>
                     </div>
                 </div>
@@ -725,11 +700,9 @@ function openColumnConfigModal() {
                         const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
                         const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
                         const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
-                        const colorSel = overlay.querySelector(`.col-color-sel[data-idx="${idx}"]`);
                         if (chk) workingConfigs[idx].visible = chk.checked;
                         if (titleInp) workingConfigs[idx].title = titleInp.value;
                         if (fmtSel) workingConfigs[idx].format = fmtSel.value;
-                        if (colorSel) workingConfigs[idx].color = colorSel.value;
                     }
                 } else if (activeTab === 'rules') {
                     for (let idx = 0; idx < workingRules.length; idx++) {
@@ -1135,7 +1108,7 @@ function renderTable() {
 
                     if (textWrap) td.classList.add('text-wrap-cell');
 
-                    td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules, col.type);
+                    td.innerHTML = formatTableCell(col.field, rawVal, col.format, 'default', userConditionalRules, col.type);
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
