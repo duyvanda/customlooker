@@ -169,7 +169,7 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM PARSER QUY TẮC ĐỘNG TỪ STYLE PANEL (ADMIN DSL: Cột = Giá trị : Kiểu, hoặc > 1000 : green)
+// HÀM PARSER QUY TẮC ĐỘNG TỪ STYLE PANEL (ADMIN DSL: Cột = Giá trị : Kiểu, Cột contain TừKhóa : Kiểu, hoặc > 1000 : green)
 function parseDslRules(text) {
     if (!text || typeof text !== 'string' || text.trim() === '') return [];
     const lines = text.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
@@ -197,29 +197,33 @@ function parseDslRules(text) {
             style = 'color_pos_neg';
         }
 
-        // Case 1: [Field] [>= | <= | > | < | = | == | contain | contains | startswith] [Value]
+        // Case 1: [Field] [>= | <= | > | < | = | == | contain | contains | startswith | startsWith] [Value]
         const matchFull = left.match(/^([a-zA-Z0-9_\s\u00C0-\u024F\u1EA0-\u1EF9]+?)\s*(>=|<=|>|<|==|=|contain|contains|startswith|startsWith)\s*(.*)$/i);
         if (matchFull) {
             const field = matchFull[1].trim();
             let op = matchFull[2].toLowerCase();
             const val = matchFull[3].trim();
             if (op === '=' || op === '==') op = 'equals';
-            if (op === 'contain') op = 'contains';
+            if (op === 'contain' || op === 'contains') op = 'contains';
             if (op === 'startswith') op = 'startsWith';
 
             rules.push({ field, operator: op, value: val, style });
             return;
         }
 
-        // Case 2: [>= | <= | > | <] [Value] (áp dụng cho mọi cột số)
-        const matchOpOnly = left.match(/^(>=|<=|>|<)\s*(.*)$/);
+        // Case 2: [>= | <= | > | < | contain | contains | startswith] [Value] (Áp dụng cho tất cả cột *)
+        const matchOpOnly = left.match(/^(>=|<=|>|<|contain|contains|startswith)\s*(.*)$/i);
         if (matchOpOnly) {
-            rules.push({ field: '*', operator: matchOpOnly[1], value: matchOpOnly[2].trim(), style });
+            let op = matchOpOnly[1].toLowerCase();
+            if (op === 'contain' || op === 'contains') op = 'contains';
+            if (op === 'startswith') op = 'startsWith';
+
+            rules.push({ field: '*', operator: op, value: matchOpOnly[2].trim(), style });
             return;
         }
 
         // Case 3: [Value] (mặc định equals hoặc contains cho mọi cột)
-        rules.push({ field: '*', operator: 'equals', value: left, style });
+        rules.push({ field: '*', operator: 'contains', value: left, style });
     });
 
     return rules;
@@ -247,7 +251,7 @@ function evaluateAllRules(fieldName, val, allRules) {
         const targetNum = Number(targetVal);
 
         if (rule.operator === 'contains') {
-            matched = strLower.includes(targetLower);
+            matched = targetLower !== '' && strLower.includes(targetLower);
         } else if (rule.operator === 'equals') {
             matched = strLower === targetLower;
         } else if (rule.operator === 'startsWith') {
@@ -497,7 +501,7 @@ function openColumnConfigModal() {
         return;
     }
 
-    let activeTab = 'columns'; // 'columns' | 'rules'
+    let activeTab = 'columns';
     let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || loadStoredColumnConfigs(displayFields)));
     let workingRules = JSON.parse(JSON.stringify(userConditionalRules || loadStoredRules()));
 
@@ -751,7 +755,6 @@ function openColumnConfigModal() {
             });
         }
 
-        // Reset toàn bộ về mặc định
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
@@ -763,7 +766,6 @@ function openColumnConfigModal() {
             renderTable();
         };
 
-        // Lưu & Áp Dụng
         overlay.querySelector('#btn-save-modal').onclick = () => {
             syncInputsBeforeMove();
             userColumnConfigs = workingConfigs;
