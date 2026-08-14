@@ -163,27 +163,48 @@
         setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
-    // Xuất file Excel chuẩn từ mảng 2D (headers + rows)
+    // Xuất file Excel chuẩn từ mảng 2D (Bảo toàn số 0 ở đầu cho SĐT, Mã định danh, Text)
     function downloadExcelFile(headers, rows, fileName) {
         try {
-            const aoa = [headers];
-            rows.forEach(row => {
-                const formattedRow = row.map(val => {
-                    if (val === null || val === undefined) return '';
-                    if (typeof val === 'number') return val;
-                    if (!isNaN(val) && String(val).trim() !== '' && typeof val !== 'boolean') {
-                        return Number(val);
-                    }
-                    return String(val);
-                });
-                aoa.push(formattedRow);
+            const ws = {};
+            const range = { s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: rows.length } };
+
+            // Ghi dòng Tiêu đề (Headers)
+            headers.forEach((h, colIdx) => {
+                const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: 0 });
+                ws[cellRef] = { v: String(h || ''), t: 's' };
             });
 
-            const ws = XLSX.utils.aoa_to_sheet(aoa);
+            // Ghi các dòng Dữ liệu (Rows)
+            rows.forEach((row, rowIdx) => {
+                const r = rowIdx + 1;
+                row.forEach((val, colIdx) => {
+                    const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: r });
+                    if (val === null || val === undefined || val === '') {
+                        ws[cellRef] = { v: '', t: 's' };
+                    } else if (typeof val === 'number') {
+                        ws[cellRef] = { v: val, t: 'n' };
+                    } else {
+                        const sVal = String(val).trim();
+                        // Nếu là chuỗi bắt đầu bằng '0' và có nhiều hơn 1 chữ số (ví dụ SĐT 0912..., Mã 001...)
+                        // BẮT BUỘC giữ kiểu text 's' để KHÔNG BAO GIỜ bị mất số 0 ở đầu!
+                        if (/^0\d+$/.test(sVal)) {
+                            ws[cellRef] = { v: sVal, t: 's', z: '@' };
+                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
+                            // Số thực thông thường (ví dụ: 1250000, 45.6, -10)
+                            ws[cellRef] = { v: Number(sVal), t: 'n' };
+                        } else {
+                            ws[cellRef] = { v: String(val), t: 's' };
+                        }
+                    }
+                });
+            });
+
+            ws['!ref'] = XLSX.utils.encode_range(range);
 
             // Auto fit column width
             const colWidths = headers.map((h, colIdx) => {
-                let maxLen = String(h).length;
+                let maxLen = String(h || '').length;
                 rows.forEach(r => {
                     const val = r[colIdx];
                     if (val !== null && val !== undefined) {
@@ -219,15 +240,20 @@
         }
     }
 
-    // Xuất file CSV UTF-8 with BOM
+    // Xuất file CSV UTF-8 with BOM (Bảo toàn số 0 ở đầu cho Excel khi mở CSV)
     function downloadCsvFile(headers, rows, fileName) {
         try {
             let csvContent = '\uFEFF';
-            csvContent += headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',') + '\r\n';
+            csvContent += headers.map(h => `"${String(h || '').replace(/"/g, '""')}"`).join(',') + '\r\n';
             rows.forEach(row => {
                 const line = row.map(val => {
                     if (val === null || val === undefined) return '""';
-                    return `"${String(val).replace(/"/g, '""')}"`;
+                    const sVal = String(val);
+                    // Chuỗi có số 0 ở đầu (SĐT 0912..., Mã 012...) dùng format text `="0912..."` để Excel không nuốt số 0
+                    if (/^0\d+$/.test(sVal.trim())) {
+                        return `="${sVal.trim()}"`;
+                    }
+                    return `"${sVal.replace(/"/g, '""')}"`;
                 }).join(',');
                 csvContent += line + '\r\n';
             });
@@ -268,10 +294,17 @@
                     const val = row[i];
                     if (val === null || val === undefined) {
                         obj[h] = '';
-                    } else if (!isNaN(val) && String(val).trim() !== '' && typeof val !== 'boolean') {
-                        obj[h] = Number(val);
                     } else {
-                        obj[h] = String(val);
+                        const sVal = String(val).trim();
+                        if (/^0\d+$/.test(sVal)) {
+                            obj[h] = sVal; // Giữ nguyên chuỗi số 0 ở đầu
+                        } else if (typeof val === 'number') {
+                            obj[h] = val;
+                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
+                            obj[h] = Number(sVal);
+                        } else {
+                            obj[h] = String(val);
+                        }
                     }
                 });
                 return obj;
@@ -286,7 +319,7 @@
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
         document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
         document.getElementById('subtitle').textContent = success 
-            ? 'File đã được lưu vào thư mục Downloads của bạn. Bạn cũng có thể tải thêm bản CSV hoặc copy JSON bên dưới.'
+            ? 'File đã được lưu vào thư mục Downloads của bạn (đã bảo toàn số 0 ở đầu cho SĐT, Mã định danh).'
             : 'Vui lòng bấm nút Tải File Excel bên dưới.';
 
         document.getElementById('actionBar').style.display = 'flex';
