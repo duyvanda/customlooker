@@ -1,491 +1,105 @@
-Đúng, chốt lại theo hướng mới này sẽ **sạch và đúng kiến trúc Looker Studio hơn**: bỏ hoàn toàn persistence custom, tận dụng **Setup + Style làm source of truth**, còn runtime chỉ giữ state tạm thời của viewer.
+Được — nhưng chỉ **một phần**. Cái dropdown bạn chụp kiểu `Visible columns / All columns / Column 1 / Column 2...` về bản chất là **cấu hình behavior**, không phải field binding. Tab **Setup** của Community Visualization hiện chỉ hỗ trợ `DIMENSION`, `METRIC`, và `MAX_RESULTS`; không có loại control tùy ý như dropdown/checkbox/text input ở Setup. ([Google for Developers][1])
 
-Community Visualization cho phép phần `data` định nghĩa các field xuất hiện trong tab Setup/Data và phần `style` định nghĩa các control trong tab Style; dữ liệu runtime nhận lại cũng có `fields` và `style` tương ứng. ([Google for Developers][1])
-
-## Kiến trúc cuối cùng
-
-| Chức năng                  | Nằm ở đâu        | Persist F5 |            Runtime được đổi? |
-| -------------------------- | ---------------- | ---------: | ---------------------------: |
-| Chọn field / thứ tự field  | **Setup**        |          ✅ |                            ❌ |
-| Rename field               | **Looker Setup** |          ✅ |                            ❌ |
-| Max rows                   | **Setup**        |          ✅ |                            ❌ |
-| Default Sort               | **Style**        |          ✅ | ✅ tạm thời bằng click header |
-| Conditional Formatting     | **Style**        |          ✅ |                            ❌ |
-| Page size                  | **Style**        |          ✅ |                            ❌ |
-| Enable Search              | **Style**        |          ✅ |                            ❌ |
-| Default Search Text        | **Style**        |          ✅ |       ✅ viewer có thể gõ tạm |
-| Search mode / scope        | **Style**        |          ✅ |                            ❌ |
-| Hide/Show column           | **Runtime**      |          ❌ |                            ✅ |
-| Current page               | Runtime          |          ❌ |                            ✅ |
-| Header sort override       | Runtime          |          ❌ |                            ✅ |
-| Search text viewer đang gõ | Runtime          |          ❌ |                            ✅ |
-| Storage / localStorage     | **BỎ**           |          — |                            — |
-
-Sau F5:
-
-```text
-Setup + Style của Looker
-        ↓
-      restore
-        ↓
-Default sort
-Conditional formatting
-Page size
-Search config
-Default search text
-
-Runtime state
-        ↓
-      RESET
-        ↓
-Hidden columns → hiện lại
-Current page → page 1
-Header sort override → mất
-Search text viewer nhập → trở về defaultSearchText
-```
-
----
-
-# 1. Bỏ 100% persistence custom
-
-Iteration này xóa hoàn toàn tư duy:
-
-```text
-localStorage
-sessionStorage
-storage_bridge.html
-window.name
-Cloud Run preference API
-Firestore preference
-Storage ID
-pending persisted config
-```
-
-Trong JS không còn:
-
-```js
-saveConfig()
-loadConfig()
-sendToBridge()
-requestStoredConfig()
-STORAGE_KEY
-STORAGE_BRIDGE_URL
-```
-
-Không có bất kỳ persistence layer riêng nào nữa.
-
-**Looker Setup + Style là cấu hình lâu dài duy nhất.**
-
-Điểm này sẽ làm code đơn giản đi khá nhiều.
-
----
-
-# 2. TAB SETUP — quản lý cấu trúc dữ liệu
-
-Setup nên chỉ chịu trách nhiệm những thứ thực sự liên quan đến **field/data**.
-
-Google hiện chỉ công bố ba loại `DataElement` cho Community Visualization là `DIMENSION`, `METRIC` và `MAX_RESULTS`; không có một DataElement kiểu `SORT`. Vì vậy em không ép sort vào Setup mà để sort ở Style. ([Google for Developers][2])
-
-Concept:
+Nói cách khác:
 
 ```text
 SETUP
-────────────────────────
-
-Dimensions
-  Department
-  Employee Name
-  Date
-
-Metrics
-  Revenue
-  Target
-  Achievement %
-
-Maximum rows
-  2500
+├── Dimension
+├── Metric
+└── Max results
 ```
 
-### Rename column
-
-**Xóa hoàn toàn rename khỏi runtime.**
-
-Header lấy trực tiếp metadata Looker:
-
-```js
-column.name
-```
-
-hoặc metadata tương ứng từ:
-
-```js
-data.fields
-```
-
-Flow:
+Còn:
 
 ```text
-User đổi tên field trong Looker
-        ↓
-DSCC gửi field.name mới
-        ↓
-Table header dùng field.name
+Search scope
+Default sort column
+Sort direction
+Conditional formatting rule
+Page size
 ```
 
-Không còn:
+thì đúng API hiện tại phải để ở **Style**, vì các control `SELECT_SINGLE`, `CHECKBOX`, `TEXTINPUT`, color picker... chỉ tồn tại trong `style[]`. ([Google for Developers][1])
 
-```js
-customTitle
-alias
-renamedColumn
-columnNameOverride
+Tuy nhiên, có một cách **tận dụng Setup tốt hơn** để UI đỡ phải hiện `Column 1 / Column 2 / Column 3`.
+
+## Em đề xuất chia lại như sau
+
+### Setup chỉ quản lý field thật
+
+```text
+SETUP
+
+Dimensions
+[ Employee Name ]
+[ Department    ]
+[ Date          ]
+
+Metrics
+[ Revenue       ]
+[ Target        ]
+[ KPI %         ]
+
+Maximum rows
+[ 5000 ]
 ```
 
-trong runtime state.
+Editor chọn field và thứ tự field tại đây. Looker sẽ gửi metadata thật xuống JS. Google xác nhận `data` config chính là phần định nghĩa Dimension/Metric được render trong property panel Setup. ([Google for Developers][2])
 
-Điều này đúng yêu cầu của bạn: **Looker đã có rename thì custom table không làm lại.**
+Vậy trong JS mình biết:
+
+```text
+Column 1 = Employee Name
+Column 2 = Department
+Column 3 = Date
+Column 4 = Revenue
+Column 5 = Target
+Column 6 = KPI %
+```
 
 ---
 
-# 3. Tạo một `baseColumns` cố định cho toàn bộ engine
+# Nhưng dropdown Style vẫn không tự hiện tên field
 
-Đây là phần rất quan trọng vì sau này runtime hide column không được làm lệch Sort/Conditional Formatting.
-
-Ngay khi nhận DSCC data:
-
-```js
-baseColumns = [
-    {
-        slot: 0,
-        key: 'c0',
-        fieldId: '...',
-        name: 'Employee',
-        type: 'TEXT',
-        rawIndex: 0
-    },
-    {
-        slot: 1,
-        key: 'c1',
-        fieldId: '...',
-        name: 'Revenue',
-        type: 'NUMBER',
-        rawIndex: 1
-    }
-];
-```
-
-Tất cả Style sẽ tham chiếu vào:
+Ví dụ cái bạn đang thấy:
 
 ```text
-Column 1 → c0
-Column 2 → c1
-Column 3 → c2
+Visible columns
+All columns
+Column 1
+Column 2
+Column 3
 ...
 ```
 
-**Không bao giờ tham chiếu theo visible index.**
-
-Ví dụ:
+Em **không thể làm native Style dropdown tự động thành**:
 
 ```text
-Setup:
-
-Column 1 = Employee
-Column 2 = Department
-Column 3 = Revenue
-```
-
-Runtime user ẩn Department:
-
-```text
-Visible:
-
-Employee
-Revenue
-```
-
-Nhưng Revenue **vẫn là `c2 / Column 3`**, không trở thành Column 2.
-
-Nhờ vậy:
-
-```text
-Conditional Rule → Column 3
-Sort Style       → Column 3
-```
-
-vẫn áp đúng Revenue.
-
----
-
-# 4. TAB STYLE — Default Sorting
-
-Chọn **phương án B** như bạn yêu cầu.
-
-Style giữ default:
-
-```text
-SORTING
-────────────────────
-
-Default sort column
-[ Column 3 ▼ ]
-
-Default direction
-[ Descending ▼ ]
-
-Allow header sorting
-☑
-```
-
-Style control như `SELECT_SINGLE`, `CHECKBOX`, `TEXTINPUT`, `FILL_COLOR`, `FONT_COLOR` đều được Community Visualization hỗ trợ. ([Google for Developers][2])
-
-Ví dụ:
-
-```json
-{
-  "id": "sorting",
-  "label": "Sorting",
-  "elements": [
-    {
-      "id": "defaultSortColumn",
-      "label": "Default sort column",
-      "type": "SELECT_SINGLE",
-      "defaultValue": "none",
-      "options": [
-        { "label": "None", "value": "none" },
-        { "label": "Column 1", "value": "c0" },
-        { "label": "Column 2", "value": "c1" },
-        { "label": "Column 3", "value": "c2" }
-      ]
-    },
-    {
-      "id": "defaultSortDirection",
-      "label": "Direction",
-      "type": "SELECT_SINGLE",
-      "defaultValue": "asc",
-      "options": [
-        { "label": "Ascending", "value": "asc" },
-        { "label": "Descending", "value": "desc" }
-      ]
-    },
-    {
-      "id": "allowHeaderSort",
-      "label": "Allow viewer to sort columns",
-      "type": "CHECKBOX",
-      "defaultValue": true
-    }
-  ]
-}
-```
-
----
-
-# 5. Sort runtime = temporary override
-
-State:
-
-```js
-const runtimeState = {
-    sortOverride: null,
-    currentPage: 1,
-    hiddenColumns: new Set(),
-    searchText: ''
-};
-```
-
-Effective sort:
-
-```js
-function getEffectiveSort(style) {
-    if (runtimeState.sortOverride) {
-        return runtimeState.sortOverride;
-    }
-
-    return {
-        column: style.defaultSortColumn?.value ?? 'none',
-        direction: style.defaultSortDirection?.value ?? 'asc'
-    };
-}
-```
-
-Flow:
-
-```text
-STYLE
-Revenue DESC
-    ↓
-Report mở
-    ↓
-Revenue DESC
-```
-
-Viewer click:
-
-```text
-Employee
-    ↓
-Employee ASC     ← runtime override
-```
-
-Click lần hai:
-
-```text
-Employee DESC
-```
-
-Em đề xuất click lần ba:
-
-```text
-clear override
-    ↓
-Revenue DESC     ← quay lại Style
-```
-
-Như vậy rất tiện:
-
-```text
-ASC → DESC → Default
-```
-
-F5 cũng:
-
-```text
-sortOverride = null
-        ↓
-Revenue DESC từ Style
-```
-
-### Khi sort thay đổi
-
-Luôn:
-
-```js
-runtimeState.currentPage = 1;
-```
-
-tránh đang Page 8 rồi sort làm dữ liệu thay đổi nhưng vẫn đứng Page 8.
-
----
-
-# 6. SEARCH — cấu hình 100% ở Style
-
-Em sẽ **không đưa setting Search vào popup/runtime config nữa**.
-
-Style:
-
-```text
-SEARCH
-────────────────────────
-
-Enable search
-☑
-
-Default search text
-[                    ]
-
-Placeholder
-[ Search...          ]
-
-Search scope
-[ All visible columns ▼ ]
-
-Match mode
-[ Contains ▼ ]
-
-Case sensitive
-☐
-```
-
-`TEXTINPUT`, checkbox và dropdown đều là Style elements được hỗ trợ. ([Google for Developers][1])
-
-### Search runtime hoạt động thế nào?
-
-Style:
-
-```text
-Default Search Text = "MERAP"
-```
-
-Mở report:
-
-```text
-Search box:
-[ MERAP ]
-```
-
-Viewer đổi thành:
-
-```text
-[ Finance ]
-```
-
-thì đó chỉ là runtime:
-
-```js
-runtimeState.searchText = 'Finance';
-```
-
-F5:
-
-```text
-runtimeState reset
-       ↓
-Style default
-       ↓
-[ MERAP ]
-```
-
-**Không lưu `"Finance"` ở đâu cả.**
-
-Đúng philosophy:
-
-```text
-Looker Style = cấu hình
-Viewer search = interaction tạm
-```
-
-### Initialization
-
-Cần tránh mỗi lần DSCC redraw lại ghi đè text user đang gõ.
-
-Không làm:
-
-```js
-runtimeState.searchText =
-    style.defaultSearchText.value;
-```
-
-ở mọi `drawVisualization()`.
-
-Mà:
-
-```js
-let searchInitialized = false;
-```
-
-Lần đầu:
-
-```js
-if (!searchInitialized) {
-    runtimeState.searchText =
-        style.defaultSearchText?.value ?? '';
-
-    searchInitialized = true;
-}
-```
-
-Nếu report editor thực sự thay `defaultSearchText` trong Edit mode thì cần detect Style value thay đổi và cập nhật appropriately.
-
----
-
-# 7. Search Scope
-
-Em đề xuất options:
-
-```text
-All columns
 Visible columns
-Text columns only
+All columns
+Employee Name
+Department
+Revenue
+KPI %
+```
+
+theo field editor vừa chọn trong Setup.
+
+Lý do là `SELECT_SINGLE.options` của Community Visualization phải được khai báo tĩnh trong config JSON. ([Google for Developers][1])
+
+Đây là hạn chế của API Community Visualization chứ không phải do code của mình.
+
+---
+
+# Nhưng có thể thiết kế tốt hơn
+
+Thay vì:
+
+```text
+Search scope
+[ Visible columns ▼ ]
+
+All columns
 Column 1
 Column 2
 Column 3
@@ -493,63 +107,81 @@ Column 3
 Column 20
 ```
 
-Trong đó default:
+em đề xuất Search chỉ có:
+
+```text
+SEARCH
+
+Enable search
+☑
+
+Search scope
+[ Visible columns ▼ ]
+
+Options:
+• Visible columns
+• All columns
+```
+
+**Bỏ toàn bộ Column 1...20 khỏi Search.**
+
+Vì thực tế search theo một column cụ thể không quá cần thiết với table này.
+
+Flow:
 
 ```text
 Visible columns
+→ chỉ search những column đang hiện
+
+All columns
+→ search cả column runtime đang hidden
 ```
 
-Nếu runtime user hide:
-
-```text
-Phone
-Email
-```
-
-và scope = `Visible columns`, search không xét Phone/Email nữa.
-
-Nếu:
-
-```text
-scope = All columns
-```
-
-thì dù Email đang hidden:
-
-```text
-search "abc@merap..."
-```
-
-vẫn có thể match row.
-
-Rõ ràng và predictable.
+UI gọn hẳn.
 
 ---
 
-# 8. Conditional Formatting hoàn toàn ở Style
+# Sort thì khác
 
-Không còn runtime Rule Builder.
-
-Không còn:
+Sort cần chọn **một field cụ thể**, nên Style vẫn phải có:
 
 ```text
-+ Add Rule
-Delete Rule
-Save Rule
-local rules
+Default sort column
+[ Column 4 ▼ ]
 ```
 
-Tạo cố định **5 rule**.
+Tuy nhiên em đề xuất có thêm option:
 
 ```text
-CONDITIONAL FORMATTING — RULE 1
-───────────────────────────────
+None
+First column
+Last metric
+Column 1
+Column 2
+...
+```
 
-Enable
-☑
+Hoặc đơn giản nhất:
 
-Column
-[ Column 3 ▼ ]
+```text
+Default sort column
+[ Column 1 ▼ ]
+```
+
+Trong table UI, editor nhìn Setup đã biết Column 1 là field nào.
+
+---
+
+# Conditional Formatting cũng tương tự
+
+Rule:
+
+```text
+Rule 1
+Enable ☑
+
+Apply to
+[ Column 4 ▼ ]
 
 Condition
 [ Greater than ▼ ]
@@ -557,404 +189,168 @@ Condition
 Value
 [ 100000000 ]
 
-Second value
-[              ]
-
 Background
 [ ■ ]
-
-Text
-[ ■ ]
-
-Bold
-☑
 ```
 
-Các rule 2–5 giống vậy.
+Conditional formatting bắt buộc phải chỉ định column, nên vẫn cần column position ở Style.
+
+Nhưng mình có thể làm thêm một cải tiến rất hữu ích:
+
+## Hiển thị mapping ngay trong table editor/runtime
+
+Ví dụ toolbar hoặc tooltip:
+
+```text
+Columns
+
+1 — Employee Name
+2 — Department
+3 — Date
+4 — Revenue
+5 — Target
+6 — KPI %
+```
+
+Thế là khi editor vào Style:
+
+```text
+Conditional Rule 1
+Apply to: Column 4
+```
+
+họ biết ngay:
+
+```text
+Column 4 = Revenue
+```
+
+Không cần đoán.
 
 ---
 
-# 9. Operators cho Conditional Formatting
+# Có nên tạo riêng field trong Setup như "Sort Field"?
 
-Em đề xuất engine hỗ trợ:
+Về kỹ thuật có thể khai báo thêm một `DIMENSION`, ví dụ:
 
 ```text
-Number / Date:
->
->=
-<
-<=
-=
-!=
-Between
+SETUP
 
-Text:
-Equals
-Not equal
-Contains
-Does not contain
-Starts with
-Ends with
-Empty
-Not empty
+Dimensions
+[ Employee ]
+[ Department ]
+
+Metrics
+[ Revenue ]
+
+Sort Field
+[ Revenue ]
 ```
 
-Không cần user chọn type.
+Nhưng em **không khuyên**.
 
-Engine tự đọc:
-
-```js
-column.type
-```
-
-rồi normalize value.
+Vì `DIMENSION`/`METRIC` trong Setup là **field tham gia vào data request**, không phải control UI thuần túy. Thêm một field chỉ để chọn sort/search có thể làm thay đổi dataset/granularity mà Looker gửi xuống visualization. Setup được thiết kế để binding data, không phải làm settings panel. ([Google for Developers][1])
 
 Ví dụ:
 
 ```text
-Column 3 = Revenue
-type NUMBER
+Rows hiện tại:
 
-rule:
-> 100000000
+Department | Revenue
+Sales      | 100
+IT         | 80
 ```
 
-→ numeric comparison.
+Nếu mình thêm:
 
 ```text
-Column 2 = Department
-type TEXT
-
-rule:
-Contains "Sales"
+Sort Field = Employee
 ```
 
-→ string comparison.
+như một Dimension riêng, Looker có thể trả dataset theo:
+
+```text
+Department + Employee
+```
+
+→ granularity thay đổi.
+
+Không đáng.
 
 ---
 
-# 10. Rule priority
+# Vậy em chỉnh plan lại thế này
 
-Để tránh hai rule đánh nhau, em chốt:
-
-```text
-Rule 1 = priority cao nhất
-Rule 2
-Rule 3
-Rule 4
-Rule 5 = thấp nhất
-```
-
-**First matching rule wins.**
-
-Ví dụ:
+### Setup
 
 ```text
-Rule 1: Revenue > 200M → Green
-Rule 2: Revenue > 100M → Yellow
+DATA
+
+Dimensions
+[ ... ]
+
+Metrics
+[ ... ]
+
+Maximum rows
+[ ... ]
 ```
 
-250M:
+Chịu trách nhiệm:
 
 ```text
-match Rule 1
-→ Green
-→ stop
+field thật
+field order
+field rename
+data type
+max rows
 ```
-
-Không bị Rule 2 override sau đó.
 
 ---
 
-# 11. Conditional formatting không bị ảnh hưởng bởi hide column
-
-Giả sử:
+### Style — Table
 
 ```text
-Column 1 Employee
-Column 2 Department
-Column 3 Revenue
-```
-
-Rule:
-
-```text
-Column 3
-> 100M
-green
-```
-
-Runtime hide Department:
-
-```text
-Employee | Revenue
-```
-
-Rule vẫn truy cập:
-
-```js
-row[column.rawIndex]
-```
-
-từ `baseColumns.c2`.
-
-Không dùng:
-
-```js
-visibleColumns[1]
-```
-
-cho rule.
-
-Đây là điểm bắt buộc phải làm đúng.
-
----
-
-# 12. Hide / Show Columns chỉ Runtime
-
-Giữ feature hide columns như hiện tại, nhưng **không persistence**.
-
-Toolbar:
-
-```text
-Columns ▼
-```
-
-Popup:
-
-```text
-☑ Employee
-☑ Department
-☑ Revenue
-☐ Email
-☐ Phone
-```
-
-State:
-
-```js
-runtimeState.hiddenColumns = new Set([
-    'field-email',
-    'field-phone'
-]);
-```
-
-Ở đây nên lưu `fieldId`, không lưu visible index.
-
-F5:
-
-```js
-hiddenColumns = new Set();
-```
-
-→ tất cả cột từ Setup hiện lại.
-
-### Khi Looker redraw do filter/date range
-
-Trong cùng một iframe lifecycle:
-
-```text
-hide Email
-→ filter report
-→ DSCC redraw
-```
-
-em sẽ **giữ Email hidden**.
-
-Chỉ reset khi visualization thực sự reload/F5.
-
-Tức là runtime state sống trong JS memory, không storage.
-
----
-
-# 13. Pagination
-
-Style:
-
-```text
-PAGINATION
-────────────────
-
-Enable pagination
-☑
+TABLE
 
 Rows per page
 [ 25 ▼ ]
+
+Enable pagination
+☑
 
 Show row count
 ☑
 ```
 
-Options:
-
-```text
-10
-25
-50
-100
-```
-
-Current page:
-
-```js
-runtimeState.currentPage
-```
-
-Không persist.
-
-F5:
-
-```text
-Page 1
-```
-
-Khi:
-
-```text
-Search changed
-Sort changed
-Hide/show changed
-Page size changed
-```
-
-→ quay về:
-
-```text
-currentPage = 1
-```
-
 ---
 
-# 14. Render pipeline cuối cùng
-
-Đây là pipeline em muốn code tuân thủ tuyệt đối:
+### Style — Search
 
 ```text
-dscc.subscribeToData()
-        ↓
-drawVisualization(data)
-        ↓
-read SETUP fields
-        ↓
-build baseColumns
-        ↓
-read STYLE config
-        ↓
-initialize runtime defaults if needed
-        ↓
-get visibleColumns
-        ↓
-normalize rows
-        ↓
 SEARCH
-        ↓
-SORT
-        ↓
-PAGINATE
-        ↓
-render visible columns
-        ↓
-apply conditional formatting
+
+Enable search
+☑
+
+Default search text
+[          ]
+
+Placeholder
+[ Search... ]
+
+Search scope
+[ Visible columns ▼ ]
+
+Options:
+• Visible columns
+• All columns
+
+Case sensitive
+☐
 ```
 
-Quan trọng:
-
-```text
-SEARCH → SORT → PAGINATION
-```
-
-không:
-
-```text
-PAGINATION → SORT
-```
-
-Nếu paginate trước rồi sort thì chỉ sort 25 row hiện tại, sai.
-
----
-
-# 15. State model cuối cùng
-
-Persistent state duy nhất:
-
-```text
-LOOKER
-├── Setup
-│   ├── Dimensions
-│   ├── Metrics
-│   ├── field order
-│   ├── field rename
-│   └── max rows
-│
-└── Style
-    ├── Default sort
-    ├── Conditional rules 1–5
-    ├── Page size
-    ├── Search enabled
-    ├── Default search text
-    ├── Search scope
-    ├── Search mode
-    └── visual styling
-```
-
-Runtime:
-
-```text
-JS MEMORY
-├── currentPage
-├── searchText temporary
-├── sortOverride
-└── hiddenColumns
-```
-
-**Không có layer thứ ba.**
-
----
-
-# 16. Những code cũ phải remove
-
-Iteration này em sẽ yêu cầu remove hoàn toàn:
-
-```text
-Skeleton
-Storage bridge
-localStorage
-sessionStorage
-Persistence keys
-Save configuration
-Restore configuration
-Runtime rename
-Runtime conditional-format modal
-Runtime conditional rule persistence
-Runtime default sort persistence
-Runtime search config modal
-Storage ID
-Cloud persistence
-```
-
-Có thể giữ popup:
-
-```text
-Columns
-```
-
-vì hide/show vẫn runtime.
-
----
-
-# 17. Một lưu ý về Column 1 / Column 2
-
-Do các option của `SELECT_SINGLE` trong Style config phải khai báo trước, Community Visualization không có cơ chế để runtime biến dropdown thành danh sách field động như:
-
-```text
-Revenue
-Employee
-Department
-```
-
-từ fields vừa chọn; options của selector được định nghĩa trong config JSON. ([Google for Developers][1])
-
-Vì vậy UI Style sẽ dùng:
+**Bỏ:**
 
 ```text
 Column 1
@@ -963,120 +359,198 @@ Column 3
 ...
 ```
 
-Còn tên thực tế xem ở Setup/table:
-
-```text
-Column 1 → Employee Name
-Column 2 → Department
-Column 3 → Revenue
-```
-
-Đây là limitation em chấp nhận để đổi lại persistence sạch và ổn định.
+khỏi Search Scope.
 
 ---
 
-# 18. Acceptance test cho iteration này
-
-Sau khi code xong, em sẽ coi build đạt khi hành vi như sau:
+### Style — Sorting
 
 ```text
-STYLE:
-Default sort = Column 3 DESC
+SORTING
 
-→ F5
-→ Column 3 DESC
+Default sort
+[ Column 4 ▼ ]
 
-→ click Column 1
-→ Column 1 ASC
+Direction
+[ Descending ▼ ]
 
-→ click lần 2
-→ Column 1 DESC
-
-→ click lần 3
-→ quay Column 3 DESC
+Allow header sorting
+☑
 ```
 
-Conditional:
+Runtime Option B:
 
 ```text
-Rule 1:
-Column 3 > 100
-Green
+Style default
+      ↓
+Revenue DESC
 
-→ F5
-→ rule vẫn còn
+click Employee
+      ↓
+Employee ASC
 
-→ hide Column 2 runtime
-→ Column 3 vẫn green đúng dữ liệu
+click lần 2
+      ↓
+Employee DESC
+
+click lần 3
+      ↓
+Revenue DESC
 ```
 
-Search:
+---
+
+### Style — Conditional Formatting
 
 ```text
-Style:
-Default Search = MERAP
+RULE 1
 
-→ mở report
-→ input = MERAP
+Enable
+☑
 
-→ viewer gõ Sales
-→ filter Sales
+Apply to
+[ Column 4 ▼ ]
 
-→ F5
-→ input lại MERAP
+Condition
+[ Greater than ▼ ]
+
+Value
+[ 100000000 ]
+
+Background
+[ ■ ]
+
+Text color
+[ ■ ]
+
+Bold
+☑
 ```
 
-Hide:
+5 rule cố định.
+
+---
+
+### Runtime
+
+Chỉ còn:
 
 ```text
-hide Email
-→ Email mất
-
-→ filter report
-→ Email vẫn hidden
-
-→ F5
-→ Email hiện lại
+Search text viewer đang gõ
+Current page
+Temporary sort override
+Hide/show columns
 ```
 
-Rename:
+Không:
 
 ```text
-Rename Revenue → Doanh thu
-trong Looker
-
-→ custom table
-→ Header = Doanh thu
-
-Không có runtime Rename.
+Rename
+Conditional rule editor
+Search config
+Default sort config
+Persistence
 ```
 
-Và quan trọng nhất:
+---
+
+## Hide column vẫn để runtime
+
+Ví dụ:
 
 ```text
-DevTools → Application
+Columns ▼
 
-Custom visualization KHÔNG:
-localStorage.setItem()
-sessionStorage.setItem()
-storage bridge
-IndexedDB
-cookie persistence
+☑ Employee Name
+☑ Department
+☑ Revenue
+☐ Email
+☐ Phone
 ```
 
-### Chốt
-
-Em sẽ đi theo đúng mô hình:
+F5:
 
 ```text
-SETUP = dữ liệu / field / tên cột
-STYLE = cấu hình report cần lưu
-RUNTIME = interaction tạm của viewer
+reset → tất cả cột hiện lại
 ```
 
-Trong đó **Option B cho Sort**, Conditional Formatting 100% Style, Rename 100% Looker, Search configuration 100% Style, Hide Column 100% runtime, và **zero custom persistence**.
+Đúng requirement hiện tại.
 
-Đây là architecture em thấy hợp lý nhất cho bản tiếp theo.
+---
+
+## Quan trọng: map Column phải luôn dựa trên Setup
+
+Em sẽ định nghĩa:
+
+```text
+Setup field order
+      ↓
+baseColumns
+
+c0 = Employee Name
+c1 = Department
+c2 = Revenue
+c3 = Target
+```
+
+Runtime hide:
+
+```text
+Department
+```
+
+không được đổi mapping thành:
+
+```text
+c0 Employee
+c1 Revenue   ❌
+```
+
+Mà vẫn:
+
+```text
+c0 Employee
+c1 Department hidden
+c2 Revenue
+c3 Target
+```
+
+Vậy:
+
+```text
+Conditional Rule = Column 3
+```
+
+luôn là Revenue, kể cả Column 2 đang hidden.
+
+---
+
+### Chốt UI gọn hơn
+
+Cái menu trong ảnh hiện tại:
+
+```text
+Visible columns
+All columns
+Column 1
+Column 2
+Column 3
+Column 4
+...
+```
+
+em sẽ đổi thành chỉ:
+
+```text
+Visible columns
+All columns
+```
+
+cho **Search Scope**.
+
+Còn những chỗ thực sự cần chọn field như **Sort** và **Conditional Formatting** mới giữ `Column 1...N`.
+
+Đây là cách cân bằng tốt nhất giữa hạn chế API của Looker Community Visualization và trải nghiệm editor hiện tại.
 
 [1]: https://developers.google.com/looker-studio/visualization/config-reference?utm_source=chatgpt.com "Community Visualization Config Reference  |  Community Visualizations  |  Google for Developers"
-[2]: https://developers.google.com/looker-studio/visualization/config-reference "Community Visualization Config Reference  |  Community Visualizations  |  Google for Developers"
+[2]: https://developers.google.com/data-studio/visualization/define-config?utm_source=chatgpt.com "Defining the visualization config  |  Integrate and share  |  Google for Developers"

@@ -297,7 +297,6 @@ function evaluateConditionalRule(colSlotKey, val, rules, fieldType = '') {
     const strNormalized = remove_accents(str);
 
     for (const rule of rules) {
-        // Kiểm tra phạm vi cột áp dụng
         if (rule.columnSlot !== '*' && rule.columnSlot !== colSlotKey) {
             continue;
         }
@@ -368,7 +367,6 @@ function formatTableCell(colSlotKey, val, rules, fieldType = '') {
         formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
     }
 
-    // Đánh giá tô màu / Badge từ Style
     const ruleStyle = evaluateConditionalRule(colSlotKey, val, rules, fieldType);
     if (ruleStyle) {
         if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
@@ -390,7 +388,7 @@ function formatTableCell(colSlotKey, val, rules, fieldType = '') {
     return formattedVal;
 }
 
-// HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (TẠM THỜI TRONG PHIÊN, RESET KHI F5)
+// HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (HIỂN THỊ MAPPING COLUMN 1..N CHO EDITOR TIỆN XEM)
 function openRuntimeColumnsPopup(baseColumns) {
     try {
         const overlay = document.createElement('div');
@@ -398,20 +396,21 @@ function openRuntimeColumnsPopup(baseColumns) {
         overlay.id = 'runtime-columns-modal';
 
         overlay.innerHTML = `
-            <div class="modal-dialog" style="max-width: 520px;">
+            <div class="modal-dialog" style="max-width: 540px;">
                 <div class="modal-header">
-                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">👁️ Ẩn / Hiện Cột Hiển Thị (Runtime)</span>
+                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">👁️ Ẩn / Hiện Cột & Thứ Tự Style (Runtime)</span>
                     <button class="modal-close-btn" id="btn-close-col-modal">✕</button>
                 </div>
-                <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
-                    <div style="font-size: 11.5px; color: #64748b; margin-bottom: 8px;">
-                        💡 Tích chọn các cột bạn muốn xem. Cài đặt này chỉ áp dụng tạm thời trong phiên làm việc hiện tại và tự động khôi phục khi F5.
+                <div class="modal-body" style="max-height: 62vh; overflow-y: auto;">
+                    <div style="font-size: 11.5px; color: #475569; margin-bottom: 8px; line-height: 1.45;">
+                        💡 <strong>Vị trí Style:</strong> Dùng để đối chiếu khi bạn thiết lập <em>Sắp xếp (Sorting)</em> hoặc <em>Quy tắc tô màu (Rules)</em> trong tab Style của Looker Studio.
                     </div>
                     <table class="col-config-table">
                         <thead>
                             <tr>
-                                <th style="width: 40px; text-align: center;">STT</th>
+                                <th style="width: 45px; text-align: center;">STT</th>
                                 <th style="width: 50px; text-align: center;">Hiện</th>
+                                <th style="width: 140px;">Vị trí Style</th>
                                 <th>Tên Cột (Looker Setup)</th>
                             </tr>
                         </thead>
@@ -423,6 +422,9 @@ function openRuntimeColumnsPopup(baseColumns) {
                                         <td style="text-align: center; color: #64748b; font-weight: 700;">${idx + 1}</td>
                                         <td style="text-align: center;">
                                             <input type="checkbox" class="runtime-col-chk" data-field-id="${col.fieldId}" data-field-name="${col.name}" ${isVisible ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+                                        </td>
+                                        <td style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700; color: #15803d;">
+                                            Column ${idx + 1} (${col.key})
                                         </td>
                                         <td style="font-weight: 600; color: #0f172a;">${col.name}</td>
                                     </tr>
@@ -520,15 +522,7 @@ function renderTable() {
         const searchMode = (styleConfig.searchMode && styleConfig.searchMode.value) || 'contains';
         const caseSensitive = styleConfig.searchCaseSensitive ? styleConfig.searchCaseSensitive.value === true : false;
 
-        let searchCols = visibleColumns;
-        if (searchScope === 'all') {
-            searchCols = baseColumns;
-        } else if (searchScope.startsWith('c')) {
-            const slot = parseInt(searchScope.substring(1), 10);
-            if (!isNaN(slot) && slot >= 0 && slot < baseColumns.length) {
-                searchCols = [baseColumns[slot]];
-            }
-        }
+        const searchCols = (searchScope === 'all') ? baseColumns : visibleColumns;
 
         let filteredRows = rawRows;
         if (runtimeState.searchText && runtimeState.searchText.trim() !== '') {
@@ -548,7 +542,6 @@ function renderTable() {
                     } else if (searchMode === 'startsWith') {
                         return cellStr.startsWith(query);
                     } else {
-                        // Contains: kiểm tra tất cả các từ khóa
                         return queryWords.every(word => cellStr.includes(word));
                     }
                 });
@@ -636,6 +629,11 @@ function renderTable() {
             const btnColPopup = document.createElement('button');
             btnColPopup.className = 'btn-col-config';
             btnColPopup.innerHTML = `<span>👁️ Cột hiển thị (${visibleColumns.length}/${baseColumns.length})</span>`;
+            
+            // Tooltip hiển thị mapping Column 1..N
+            const mappingTooltip = baseColumns.map((c, i) => `Column ${i + 1}: ${c.name}`).join(' | ');
+            btnColPopup.title = `Đối chiếu vị trí Style: ${mappingTooltip}`;
+            
             btnColPopup.onclick = () => openRuntimeColumnsPopup(baseColumns);
             toolbarLeft.appendChild(btnColPopup);
         }
@@ -737,7 +735,6 @@ function renderTable() {
                         if (runtimeState.sortOverride.direction === 'asc') {
                             runtimeState.sortOverride.direction = 'desc';
                         } else {
-                            // Lần 3: Xóa override để quay lại default từ Style
                             runtimeState.sortOverride = null;
                         }
                     } else {
@@ -876,7 +873,7 @@ function renderTable() {
                 const lastPageBtn = document.createElement('button');
                 lastPageBtn.className = 'page-btn';
                 lastPageBtn.textContent = totalPages;
-                lastPageBtn.addEventListener('click', () => { runtimeState.currentPage = totalPages; renderTable(); });
+                lastPageBtn.addEventListener('click', () => { tableState.currentPage = totalPages; renderTable(); });
                 paginationControls.appendChild(lastPageBtn);
             }
 

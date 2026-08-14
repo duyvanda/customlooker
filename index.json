@@ -116,37 +116,7 @@
                     "defaultValue": "visible",
                     "options": [
                         { "label": "Cột đang hiển thị (Visible columns)", "value": "visible" },
-                        { "label": "Tất cả các cột (All columns)", "value": "all" },
-                        { "label": "Column 1 (Cột 1)", "value": "c0" },
-                        { "label": "Column 2 (Cột 2)", "value": "c1" },
-                        { "label": "Column 3 (Cột 3)", "value": "c2" },
-                        { "label": "Column 4 (Cột 4)", "value": "c3" },
-                        { "label": "Column 5 (Cột 5)", "value": "c4" },
-                        { "label": "Column 6 (Cột 6)", "value": "c5" },
-                        { "label": "Column 7 (Cột 7)", "value": "c6" },
-                        { "label": "Column 8 (Cột 8)", "value": "c7" },
-                        { "label": "Column 9 (Cột 9)", "value": "c8" },
-                        { "label": "Column 10 (Cột 10)", "value": "c9" },
-                        { "label": "Column 11 (Cột 11)", "value": "c10" },
-                        { "label": "Column 12 (Cột 12)", "value": "c11" },
-                        { "label": "Column 13 (Cột 13)", "value": "c12" },
-                        { "label": "Column 14 (Cột 14)", "value": "c13" },
-                        { "label": "Column 15 (Cột 15)", "value": "c14" },
-                        { "label": "Column 16 (Cột 16)", "value": "c15" },
-                        { "label": "Column 17 (Cột 17)", "value": "c16" },
-                        { "label": "Column 18 (Cột 18)", "value": "c17" },
-                        { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" },
-                        { "label": "Column 21 (Cột 21)", "value": "c20" },
-                        { "label": "Column 22 (Cột 22)", "value": "c21" },
-                        { "label": "Column 23 (Cột 23)", "value": "c22" },
-                        { "label": "Column 24 (Cột 24)", "value": "c23" },
-                        { "label": "Column 25 (Cột 25)", "value": "c24" },
-                        { "label": "Column 26 (Cột 26)", "value": "c25" },
-                        { "label": "Column 27 (Cột 27)", "value": "c26" },
-                        { "label": "Column 28 (Cột 28)", "value": "c27" },
-                        { "label": "Column 29 (Cột 29)", "value": "c28" },
-                        { "label": "Column 30 (Cột 30)", "value": "c29" }
+                        { "label": "Tất cả các cột (All columns)", "value": "all" }
                     ]
                 },
                 {
@@ -204,7 +174,17 @@
                         { "label": "Column 17 (Cột 17)", "value": "c16" },
                         { "label": "Column 18 (Cột 18)", "value": "c17" },
                         { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
                     ]
                 },
                 {
@@ -297,7 +277,17 @@
                         { "label": "Column 17 (Cột 17)", "value": "c16" },
                         { "label": "Column 18 (Cột 18)", "value": "c17" },
                         { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
                     ]
                 },
                 {
@@ -390,7 +380,17 @@
                         { "label": "Column 17 (Cột 17)", "value": "c16" },
                         { "label": "Column 18 (Cột 18)", "value": "c17" },
                         { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
                     ]
                 },
                 {
@@ -483,7 +483,17 @@
                         { "label": "Column 17 (Cột 17)", "value": "c16" },
                         { "label": "Column 18 (Cột 18)", "value": "c17" },
                         { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
                     ]
                 },
                 {
@@ -576,7 +586,17 @@
                         { "label": "Column 17 (Cột 17)", "value": "c16" },
                         { "label": "Column 18 (Cột 18)", "value": "c17" },
                         { "label": "Column 19 (Cột 19)", "value": "c18" },
-                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
                     ]
                 },
                 {
