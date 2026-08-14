@@ -1,9 +1,10 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage & fallback multi-tier
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v6';
-const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v6';
+// Khóa lưu trữ cấu hình cột và quy tắc màu trên Storage Bridge & Local Storage
+const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v7';
+const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v7';
+const STORAGE_BRIDGE_URL = 'https://storage.googleapis.com/analytics_merap/excelchart2/storage_bridge.html';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
@@ -20,8 +21,91 @@ let tableState = {
     searchQuery: ''
 };
 
-// HỆ THỐNG LƯU TRỮ ĐA TẦNG (MULTI-LAYER PERSISTENCE: LOCALSTORAGE + SESSIONSTORAGE + WINDOW.NAME)
-function saveToStorage(key, data) {
+// STORAGE BRIDGE: LƯU TRỮ VĨNH VIỄN TRÊN DOMAIN CỐ ĐỊNH (storage.googleapis.com)
+// Khắc phục 100% việc Looker Studio thay đổi subdomain sandbox googleusercontent.com sau mỗi lần F5!
+let bridgeIframe = null;
+let isBridgeReady = false;
+const pendingBridgeMessages = [];
+
+function sendToBridge(msg) {
+    try {
+        if (bridgeIframe && bridgeIframe.contentWindow && isBridgeReady) {
+            bridgeIframe.contentWindow.postMessage(msg, '*');
+        } else {
+            pendingBridgeMessages.push(msg);
+        }
+    } catch (e) {
+        console.warn('[ExcelViz] sendToBridge error:', e);
+    }
+}
+
+function requestStoredConfigFromBridge() {
+    sendToBridge({ action: 'GET_CONFIG', key: USER_CONFIG_STORAGE_KEY });
+    sendToBridge({ action: 'GET_CONFIG', key: USER_RULES_STORAGE_KEY });
+}
+
+function initStorageBridge() {
+    if (typeof document === 'undefined' || bridgeIframe) return;
+    try {
+        bridgeIframe = document.createElement('iframe');
+        bridgeIframe.id = 'excelviz-storage-bridge';
+        bridgeIframe.style.display = 'none';
+        bridgeIframe.style.width = '0';
+        bridgeIframe.style.height = '0';
+        bridgeIframe.style.border = 'none';
+        bridgeIframe.src = STORAGE_BRIDGE_URL;
+
+        window.addEventListener('message', (e) => {
+            try {
+                if (!e.data || typeof e.data !== 'object') return;
+                
+                if (e.data.action === 'BRIDGE_READY') {
+                    isBridgeReady = true;
+                    while (pendingBridgeMessages.length > 0) {
+                        const msg = pendingBridgeMessages.shift();
+                        sendToBridge(msg);
+                    }
+                    requestStoredConfigFromBridge();
+                } else if (e.data.action === 'CONFIG_LOADED') {
+                    if (e.data.key === USER_CONFIG_STORAGE_KEY && e.data.value) {
+                        if (Array.isArray(e.data.value) && e.data.value.length > 0) {
+                            const displayFields = extractDisplayFields(currentData);
+                            userColumnConfigs = syncColumnConfigsWithFields(e.data.value, displayFields);
+                            saveToLocalCache(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
+                            renderTable();
+                        }
+                    } else if (e.data.key === USER_RULES_STORAGE_KEY && e.data.value) {
+                        if (Array.isArray(e.data.value)) {
+                            userConditionalRules = e.data.value;
+                            saveToLocalCache(USER_RULES_STORAGE_KEY, userConditionalRules);
+                            renderTable();
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[ExcelViz] Bridge msg error:', err);
+            }
+        });
+
+        if (document.body) {
+            document.body.appendChild(bridgeIframe);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (document.body && !document.getElementById('excelviz-storage-bridge')) {
+                    document.body.appendChild(bridgeIframe);
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('[ExcelViz] initStorageBridge error:', e);
+    }
+}
+
+// BẬT STORAGE BRIDGE NGAY KHI CODE LOAD
+initStorageBridge();
+
+// HỆ THỐNG LƯU TRỮ ĐA TẦNG (LOCAL CACHE + PERMANENT CLOUD BRIDGE)
+function saveToLocalCache(key, data) {
     if (!data) return;
     const str = JSON.stringify(data);
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, str); } catch (e) { }
@@ -34,7 +118,12 @@ function saveToStorage(key, data) {
     } catch (e) { }
 }
 
-function loadFromStorage(key) {
+function saveToStorage(key, data) {
+    saveToLocalCache(key, data);
+    sendToBridge({ action: 'SET_CONFIG', key: key, value: data });
+}
+
+function loadFromLocalCache(key) {
     try {
         if (typeof localStorage !== 'undefined') {
             const item = localStorage.getItem(key);
@@ -68,6 +157,7 @@ function removeFromStorage(key) {
             }
         }
     } catch (e) { }
+    sendToBridge({ action: 'REMOVE_CONFIG', key: key });
 }
 
 // HỖ TRỢ KÍCH HOẠT FOCUS / CHỌN CHART KHI NHẤP CHUỘT Ở EDIT MODE
@@ -504,7 +594,7 @@ function extractDisplayFields(currentData) {
     return displayFields;
 }
 
-// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (MẶC ĐỊNH SEARCHABLE = FALSE (UNCHECK ALL), CHỈ TRUE NẾU NGƯỜI DÙNG TÍCH CHỌN)
+// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (GIỮ NGUYÊN TẤT CẢ TRẠNG THÁI ẨN/HIỆN, TÌM KIẾM, FORMAT, SORT ĐÃ LƯU)
 function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     if (!displayFields || !Array.isArray(displayFields) || displayFields.length === 0) {
         return [];
@@ -516,7 +606,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             field: df.name || df.id || `col_${idx}`,
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
-            searchable: false, // Mặc định Uncheck All theo yêu cầu User
+            searchable: false, // Mặc định Uncheck All
             format: 'auto',
             sort: 'none',
             type: df.type || '',
@@ -538,8 +628,8 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 ...ec,
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
-                visible: ec.visible !== false,
-                searchable: ec.searchable === true, // Chỉ bật khi người dùng đã tích chọn
+                visible: ec.visible !== false, // Giữ nguyên trạng thái checkbox Hiện/Ẩn
+                searchable: ec.searchable === true, // Giữ nguyên trạng thái checkbox Tìm kiếm
                 sort: ec.sort || 'none',
                 format: ec.format || 'auto',
                 type: matchedDf.type || ec.type || '',
@@ -556,7 +646,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: df.name || df.id || `col_${idx}`,
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
-                searchable: false, // Mặc định Uncheck All
+                searchable: false, // Cột mới mặc định uncheck
                 format: 'auto',
                 sort: 'none',
                 type: df.type || '',
@@ -568,15 +658,15 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     return result;
 }
 
-// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU
+// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU TỪ LOCAL CACHE
 function loadStoredColumnConfigs(displayFields) {
-    const saved = loadFromStorage(USER_CONFIG_STORAGE_KEY);
+    const saved = loadFromLocalCache(USER_CONFIG_STORAGE_KEY);
     return syncColumnConfigsWithFields(saved, displayFields);
 }
 
-// HÀM LẤY QUY TẮC MÀU
+// HÀM LẤY QUY TẮC MÀU TỪ LOCAL CACHE
 function loadStoredRules() {
-    const saved = loadFromStorage(USER_RULES_STORAGE_KEY);
+    const saved = loadFromLocalCache(USER_RULES_STORAGE_KEY);
     return Array.isArray(saved) ? saved : [];
 }
 
@@ -933,7 +1023,7 @@ function openColumnConfigModal() {
                     tableState.sortDirection = userColumnConfigs[configSortIdx].sort;
                 }
 
-                // Lưu vào hệ thống lưu trữ đa tầng (localStorage + sessionStorage + window.name)
+                // Lưu vào hệ thống lưu trữ vĩnh viễn (Local Cache + Storage Bridge)
                 saveToStorage(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
                 saveToStorage(USER_RULES_STORAGE_KEY, userConditionalRules);
 
@@ -969,7 +1059,7 @@ function renderTable() {
         const showSearch = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
         const showColConfig = styleConfig.showColConfig ? styleConfig.showColConfig.value !== false : true;
 
-        // Lấy danh sách quy tắc điều kiện động từ Modal (Lưu trữ đa tầng)
+        // Lấy danh sách quy tắc điều kiện động từ Modal
         if (!userConditionalRules) {
             userConditionalRules = loadStoredRules();
         }
