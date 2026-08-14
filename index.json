@@ -10,7 +10,7 @@
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 20
+                        "max": 30
                     }
                 },
                 {
@@ -19,7 +19,7 @@
                     "type": "METRIC",
                     "options": {
                         "min": 0,
-                        "max": 20
+                        "max": 30
                     }
                 },
                 {
@@ -36,8 +36,61 @@
     ],
     "style": [
         {
-            "id": "searchSettings",
-            "label": "Cài đặt Tìm kiếm & Bảng",
+            "id": "tableAppearance",
+            "label": "Giao diện Bảng",
+            "elements": [
+                {
+                    "id": "rowDensity",
+                    "label": "Mật độ dòng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "normal",
+                    "options": [
+                        { "label": "Gọn (Compact)", "value": "compact" },
+                        { "label": "Tiêu chuẩn (Normal)", "value": "normal" },
+                        { "label": "Thoáng (Relaxed)", "value": "relaxed" }
+                    ]
+                },
+                {
+                    "id": "tableVariant",
+                    "label": "Kiểu bảng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "striped",
+                    "options": [
+                        { "label": "Sọc ngựa vằn (Striped)", "value": "striped" },
+                        { "label": "Có viền ô (Bordered)", "value": "bordered" },
+                        { "label": "Tối giản (Default)", "value": "default" }
+                    ]
+                },
+                {
+                    "id": "fontSize",
+                    "label": "Cỡ chữ",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "13",
+                    "options": [
+                        { "label": "11px (Nhỏ)", "value": "11" },
+                        { "label": "12px (Vừa nhỏ)", "value": "12" },
+                        { "label": "13px (Tiêu chuẩn)", "value": "13" },
+                        { "label": "14px (Vừa lớn)", "value": "14" },
+                        { "label": "15px (Lớn)", "value": "15" }
+                    ]
+                },
+                {
+                    "id": "showSTT",
+                    "label": "Hiển thị cột STT (Số thứ tự)",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "textWrap",
+                    "label": "Tự động ngắt dòng (Text Wrap)",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                }
+            ]
+        },
+        {
+            "id": "tableFeatures",
+            "label": "Tính năng Bảng",
             "elements": [
                 {
                     "id": "showSearch",
@@ -46,8 +99,14 @@
                     "defaultValue": true
                 },
                 {
+                    "id": "showColConfig",
+                    "label": "Bật nút Tùy chỉnh Cột (⚙️ Cột Bảng)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
                     "id": "searchPlaceholder",
-                    "label": "Gợi ý tìm kiếm tùy chỉnh (Để trống sẽ tự động)",
+                    "label": "Gợi ý tìm kiếm tùy chỉnh",
                     "type": "TEXTINPUT",
                     "defaultValue": ""
                 }
