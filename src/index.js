@@ -93,23 +93,59 @@ if (document.readyState === 'loading') {
     showSkeleton();
 }
 
-// HÀM KIỂM TRA CHÍNH XÁC SỐ THỰC SỰ
-function isNumericValue(val) {
+// HÀM KIỂM TRA CHÍNH XÁC ĐỊNH DẠNG NGÀY THÁNG (Hỗ trợ YYYYMMDD của Looker Studio, ISO, DD-MM-YYYY)
+function isDateValue(val, fieldType = '') {
     if (val === null || val === undefined) return false;
-    if (typeof val === 'number') return !isNaN(val);
-    if (typeof val === 'boolean') return false;
-    if (typeof val !== 'string') return false;
-    const s = val.trim();
-    if (s === '') return false;
-    return /^-?\d+(\.\d+)?$/.test(s);
+    const str = String(val).trim();
+    if (str === '') return false;
+
+    // 1. Kiểm tra Schema Type từ Looker Studio DSCC
+    const ft = String(fieldType || '').toUpperCase();
+    if (ft.includes('DATE') || ft.includes('YEAR_MONTH_DAY') || ft.includes('DATETIME') || ft.includes('TIME')) {
+        return true;
+    }
+
+    // 2. Chuỗi YYYYMMDD (8 chữ số ngày tháng từ 1900 đến 2099)
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(str)) {
+        return true;
+    }
+
+    // 3. Chuỗi YYYYMMDDHHMMSS (14 chữ số ngày giờ)
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/.test(str)) {
+        return true;
+    }
+
+    // 4. Chuỗi có phân cách: YYYY-MM-DD hoặc DD-MM-YYYY hoặc DD/MM/YYYY
+    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str) || /^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(str)) {
+        return true;
+    }
+
+    return false;
 }
 
-// HÀM KIỂM TRA ĐỊNH DẠNG NGÀY THÁNG
-function isValidDate(dateStr) {
-    if (typeof dateStr !== 'string') return false;
-    if (!dateStr.includes('-') && !dateStr.includes('/') && !dateStr.includes(':')) return false;
-    const d = new Date(dateStr);
-    return d instanceof Date && !isNaN(d.getTime());
+// HÀM KIỂM TRA CHÍNH XÁC SỐ THỰC SỰ (Loại trừ triệt để định dạng ngày YYYYMMDD)
+function isNumericValue(val, fieldType = '') {
+    if (val === null || val === undefined) return false;
+    if (typeof val === 'boolean') return false;
+
+    // Nếu Looker Studio khai báo là kiểu Date thì không phải số
+    const ft = String(fieldType || '').toUpperCase();
+    if (ft.includes('DATE') || ft.includes('YEAR_MONTH_DAY') || ft.includes('DATETIME') || ft.includes('TIME')) {
+        return false;
+    }
+
+    const s = String(val).trim();
+    if (s === '') return false;
+
+    // Nếu là chuỗi YYYYMMDD 8 chữ số ngày tháng thì KHÔNG coi là số thông thường!
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s)) {
+        return false;
+    }
+
+    if (typeof val === 'number') return !isNaN(val);
+    if (typeof val !== 'string') return false;
+
+    return /^-?\d+(\.\d+)?$/.test(s);
 }
 
 // HÀM MỞ HELPER XUẤT EXCEL
@@ -137,11 +173,39 @@ function downloadViaHelper(payload) {
     }, 300);
 }
 
-// HÀM ĐỊNH DẠNG NGÀY THÁNG ĐA DẠNG
+// HÀM ĐỊNH DẠNG NGÀY THÁNG ĐA DẠNG (Chuẩn hóa YYYYMMDD -> dd-mm-yyyy)
 function formatDateValue(val, fmtStyle = 'date') {
     if (val === null || val === undefined || val === '') return '';
     const str = String(val).trim();
-    
+
+    // 1. Chuỗi YYYYMMDD 8 chữ số (Looker Studio mặc định gửi sang)
+    const match8 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/);
+    if (match8) {
+        const yyyy = match8[1];
+        const mm = match8[2];
+        const dd = match8[3];
+        if (fmtStyle === 'date_yymmdd') return `${yyyy}-${mm}-${dd}`;
+        if (fmtStyle === 'date_mmyyyy') return `${mm}/${yyyy}`;
+        if (fmtStyle === 'date_yyyy') return `${yyyy}`;
+        if (fmtStyle === 'date_ddmmyyyy_hhmmss') return `${dd}-${mm}-${yyyy} 00:00:00`;
+        return `${dd}-${mm}-${yyyy}`;
+    }
+
+    // 2. Chuỗi YYYYMMDDHHMMSS 14 chữ số
+    const match14 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/);
+    if (match14) {
+        const yyyy = match14[1];
+        const mm = match14[2];
+        const dd = match14[3];
+        const hh = match14[4];
+        const min = match14[5];
+        const ss = match14[6];
+        if (fmtStyle === 'date_ddmmyyyy_hhmmss') return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
+        if (fmtStyle === 'date_yymmdd') return `${yyyy}-${mm}-${dd}`;
+        return `${dd}-${mm}-${yyyy}`;
+    }
+
+    // 3. Chuỗi YYYY-MM-DD hoặc YYYY/MM/DD
     const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
     if (match) {
         const yyyy = match[1];
@@ -158,6 +222,7 @@ function formatDateValue(val, fmtStyle = 'date') {
         return `${dd}-${mm}-${yyyy}`;
     }
 
+    // 4. Chuỗi DD-MM-YYYY hoặc DD/MM/YYYY
     const matchDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
     if (matchDMY) {
         const dd = matchDMY[1].padStart(2, '0');
@@ -216,13 +281,14 @@ function evaluateAllRules(fieldName, val, allRules) {
 }
 
 // HÀM FORMAT CELL TOÀN DIỆN
-function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', allRules = []) {
+function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', allRules = [], fieldType = '') {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
 
     const str = String(val).trim();
-    const isNum = isNumericValue(val);
+    const isDate = isDateValue(val, fieldType) || colFmt.startsWith('date');
+    const isNum = !isDate && isNumericValue(val, fieldType);
     const num = isNum ? Number(val) : NaN;
 
     // 1. FORMAT GIÁ TRỊ CƠ BẢN
@@ -232,8 +298,9 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         formattedVal = `<span class="font-mono">${str}</span>`;
     } else if (colFmt === 'badge') {
         formattedVal = `<span class="badge badge-default">${str}</span>`;
-    } else if (colFmt.startsWith('date')) {
-        formattedVal = formatDateValue(str, colFmt);
+    } else if (isDate) {
+        // Tự động định dạng ngày tháng sang dd-mm-yyyy chuẩn Việt Nam
+        formattedVal = formatDateValue(str, colFmt === 'auto' ? 'date' : colFmt);
     } else if (isNum) {
         if (colFmt === 'number_comma') {
             formattedVal = num.toLocaleString('en-US');
@@ -253,8 +320,6 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         } else {
             formattedVal = num.toLocaleString('vi-VN');
         }
-    } else if (isValidDate(str)) {
-        formattedVal = formatDateValue(str, 'date');
     }
 
     // 2. KIỂM TRA QUY TẮC ĐIỀU KIỆN ĐỘNG (> < = contain startsWith pos neg)
@@ -291,17 +356,21 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
 }
 
 // HÀM SO SÁNH DỮ LIỆU ĐA KIỂU (Natural Sort)
-function compareValues(a, b) {
+function compareValues(a, b, fieldType = '') {
     if (a === b) return 0;
     if (a === null || a === undefined || a === '') return 1;
     if (b === null || b === undefined || b === '') return -1;
 
-    if (isNumericValue(a) && isNumericValue(b)) {
-        return Number(a) - Number(b);
+    // So sánh ngày tháng
+    if (isDateValue(a, fieldType) && isDateValue(b, fieldType)) {
+        const strA = String(a).trim();
+        const strB = String(b).trim();
+        return strA.localeCompare(strB);
     }
 
-    if (isValidDate(String(a)) && isValidDate(String(b))) {
-        return new Date(a).getTime() - new Date(b).getTime();
+    // So sánh số
+    if (isNumericValue(a, fieldType) && isNumericValue(b, fieldType)) {
+        return Number(a) - Number(b);
     }
 
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(String(a), String(b));
@@ -322,6 +391,7 @@ function extractDisplayFields(currentData) {
                 displayFields.push({
                     id: f.id || `dim_${rawIdx}`,
                     name: f.name || f.id,
+                    type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || f.type || '',
                     rawIndex: rawIdx
                 });
             }
@@ -335,6 +405,7 @@ function extractDisplayFields(currentData) {
                 displayFields.push({
                     id: f.id || `met_${rawIdx}`,
                     name: f.name || f.id,
+                    type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || f.type || '',
                     rawIndex: rawIdx
                 });
             }
@@ -347,6 +418,7 @@ function extractDisplayFields(currentData) {
                 displayFields.push({
                     id: h.id || `col_${idx}`,
                     name: h.name || h.id,
+                    type: h.type || '',
                     rawIndex: idx
                 });
             }
@@ -366,6 +438,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             visible: true,
             format: 'auto',
             color: 'default',
+            type: df.type || '',
             rawIndex: df.rawIndex
         }));
     }
@@ -381,6 +454,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             usedRawIndices.add(matchedDf.rawIndex);
             result.push({
                 ...ec,
+                type: matchedDf.type || ec.type || '',
                 rawIndex: matchedDf.rawIndex
             });
         }
@@ -396,6 +470,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 visible: true,
                 format: 'auto',
                 color: 'default',
+                type: df.type || '',
                 rawIndex: df.rawIndex
             });
         }
@@ -484,13 +559,15 @@ function openColumnConfigModal() {
                                         <td>
                                             <select class="col-config-select col-fmt-sel" data-idx="${idx}">
                                                 <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
+                                                <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
+                                                <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
+                                                <option value="date_mmyyyy" ${col.format === 'date_mmyyyy' ? 'selected' : ''}>Tháng/Năm (mm/yyyy)</option>
+                                                <option value="date_yymmdd" ${col.format === 'date_yymmdd' ? 'selected' : ''}>Chuẩn Quốc Tế (yyyy-mm-dd)</option>
                                                 <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
                                                 <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
                                                 <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
                                                 <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
                                                 <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
-                                                <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
-                                                <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
                                                 <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
                                             </select>
                                         </td>
@@ -817,7 +894,7 @@ function renderTable() {
         const rawIdx = targetCol.rawIndex;
         const dir = tableState.sortDirection === 'desc' ? -1 : 1;
         sortedRows.sort((rowA, rowB) => {
-            return dir * compareValues(rowA[rawIdx], rowB[rawIdx]);
+            return dir * compareValues(rowA[rawIdx], rowB[rawIdx], targetCol.type);
         });
     }
 
@@ -986,8 +1063,8 @@ function renderTable() {
                 const td = document.createElement('td');
                 const rawVal = row[col.rawIndex];
                 
-                const isDate = isValidDate(String(rawVal)) || col.format.startsWith('date');
-                const isNum = isNumericValue(rawVal) || ['number_comma', 'number_vn', 'currency', 'percent'].includes(col.format);
+                const isDate = isDateValue(rawVal, col.type) || col.format.startsWith('date');
+                const isNum = !isDate && (isNumericValue(rawVal, col.type) || ['number_comma', 'number_vn', 'currency', 'percent'].includes(col.format));
 
                 if (isNum) {
                     td.className = 'align-right';
@@ -999,8 +1076,8 @@ function renderTable() {
 
                 if (textWrap) td.classList.add('text-wrap-cell');
 
-                // Áp dụng định dạng và các quy tắc động > < = contain
-                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules);
+                // Áp dụng định dạng và các quy tắc động
+                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules, col.type);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
@@ -1150,7 +1227,13 @@ function renderTable() {
                 if (showSTT) rowData.push(rIdx + 1);
                 activeColumns.forEach(c => {
                     const val = row[c.rawIndex];
-                    rowData.push(val === null || val === undefined ? '' : val);
+                    if (val === null || val === undefined) {
+                        rowData.push('');
+                    } else if (isDateValue(val, c.type)) {
+                        rowData.push(formatDateValue(val, 'date'));
+                    } else {
+                        rowData.push(val);
+                    }
                 });
                 return rowData;
             });
