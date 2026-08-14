@@ -1,9 +1,9 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v5';
-const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v5';
+// Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage & fallback multi-tier
+const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v6';
+const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v6';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
@@ -19,6 +19,56 @@ let tableState = {
     lastAdminPageSize: null,
     searchQuery: ''
 };
+
+// HỆ THỐNG LƯU TRỮ ĐA TẦNG (MULTI-LAYER PERSISTENCE: LOCALSTORAGE + SESSIONSTORAGE + WINDOW.NAME)
+function saveToStorage(key, data) {
+    if (!data) return;
+    const str = JSON.stringify(data);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, str); } catch (e) { }
+    try { if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, str); } catch (e) { }
+    try {
+        let winStore = {};
+        try { winStore = JSON.parse(window.name || '{}'); } catch (e) { winStore = {}; }
+        winStore[key] = data;
+        window.name = JSON.stringify(winStore);
+    } catch (e) { }
+}
+
+function loadFromStorage(key) {
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const item = localStorage.getItem(key);
+            if (item) return JSON.parse(item);
+        }
+    } catch (e) { }
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            const item = sessionStorage.getItem(key);
+            if (item) return JSON.parse(item);
+        }
+    } catch (e) { }
+    try {
+        if (window.name) {
+            const winStore = JSON.parse(window.name);
+            if (winStore && winStore[key]) return winStore[key];
+        }
+    } catch (e) { }
+    return null;
+}
+
+function removeFromStorage(key) {
+    try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); } catch (e) { }
+    try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key); } catch (e) { }
+    try {
+        if (window.name) {
+            const winStore = JSON.parse(window.name);
+            if (winStore && winStore[key]) {
+                delete winStore[key];
+                window.name = JSON.stringify(winStore);
+            }
+        }
+    } catch (e) { }
+}
 
 // HỖ TRỢ KÍCH HOẠT FOCUS / CHỌN CHART KHI NHẤP CHUỘT Ở EDIT MODE
 try {
@@ -488,8 +538,10 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 ...ec,
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
+                visible: ec.visible !== false,
                 searchable: ec.searchable !== false,
                 sort: ec.sort || 'none',
+                format: ec.format || 'auto',
                 type: matchedDf.type || ec.type || '',
                 rawIndex: matchedDf.rawIndex
             });
@@ -516,31 +568,19 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     return result;
 }
 
-// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU TỪ LOCALSTORAGE
+// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU
 function loadStoredColumnConfigs(displayFields) {
-    let saved = null;
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            const item = localStorage.getItem(USER_CONFIG_STORAGE_KEY);
-            if (item) saved = JSON.parse(item);
-        }
-    } catch (e) { }
-
+    const saved = loadFromStorage(USER_CONFIG_STORAGE_KEY);
     return syncColumnConfigsWithFields(saved, displayFields);
 }
 
-// HÀM LẤY QUY TẮC MÀU TỪ LOCALSTORAGE
+// HÀM LẤY QUY TẮC MÀU
 function loadStoredRules() {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            const item = localStorage.getItem(USER_RULES_STORAGE_KEY);
-            if (item) return JSON.parse(item);
-        }
-    } catch (e) { }
-    return [];
+    const saved = loadFromStorage(USER_RULES_STORAGE_KEY);
+    return Array.isArray(saved) ? saved : [];
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM CHỌN CỘT TÌM KIẾM & PHÂN TRANG 10 CỘT)
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM CHỌN CỘT TÌM KIẾM, SẮP XẾP & PHÂN TRANG 10 CỘT)
 function openColumnConfigModal() {
     try {
         if (!currentData) return;
@@ -591,7 +631,7 @@ function openColumnConfigModal() {
                                     <tr>
                                         <th style="width:35px; text-align:center;">STT</th>
                                         <th style="width:45px; text-align:center;">Hiện</th>
-                                        <th style="width:45px; text-align:center;" title="Tích chọn để ô tìm kiếm nhanh quét trên cột này">🔍 Tìm</th>
+                                        <th style="width:45px; text-align:center;" title="Tích chọn để ô tìm kiếm quét trên cột này">🔍 Tìm</th>
                                         <th style="width:160px;">Tên gốc Looker/BQ</th>
                                         <th style="width:180px;">Tên hiển thị (Label)</th>
                                         <th style="width:150px;">Định dạng (Format)</th>
@@ -871,10 +911,8 @@ function openColumnConfigModal() {
 
             // Reset toàn bộ về mặc định
             overlay.querySelector('#btn-reset-modal').onclick = () => {
-                try {
-                    localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
-                    localStorage.removeItem(USER_RULES_STORAGE_KEY);
-                } catch (e) { }
+                removeFromStorage(USER_CONFIG_STORAGE_KEY);
+                removeFromStorage(USER_RULES_STORAGE_KEY);
                 userColumnConfigs = null;
                 userConditionalRules = [];
                 tableState.sortColumn = null;
@@ -895,12 +933,10 @@ function openColumnConfigModal() {
                     tableState.sortDirection = userColumnConfigs[configSortIdx].sort;
                 }
 
-                try {
-                    localStorage.setItem(USER_CONFIG_STORAGE_KEY, JSON.stringify(userColumnConfigs));
-                    localStorage.setItem(USER_RULES_STORAGE_KEY, JSON.stringify(userConditionalRules));
-                } catch (e) {
-                    console.warn('Save localStorage error:', e);
-                }
+                // Lưu vào hệ thống lưu trữ đa tầng (localStorage + sessionStorage + window.name)
+                saveToStorage(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
+                saveToStorage(USER_RULES_STORAGE_KEY, userConditionalRules);
+
                 overlay.remove();
                 renderTable();
             };
@@ -933,7 +969,7 @@ function renderTable() {
         const showSearch = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
         const showColConfig = styleConfig.showColConfig ? styleConfig.showColConfig.value !== false : true;
 
-        // Lấy danh sách quy tắc điều kiện động từ Modal (LocalStorage)
+        // Lấy danh sách quy tắc điều kiện động từ Modal (Lưu trữ đa tầng)
         if (!userConditionalRules) {
             userConditionalRules = loadStoredRules();
         }
