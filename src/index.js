@@ -6,11 +6,12 @@ let firstRender = true;
 let currentData = null;
 
 let tableState = {
-    sortColumn: null,      // index cột đang sort (0-based)
-    sortDirection: 'asc',  // 'asc' | 'desc'
+    sortColumn: null,       // index cột đang sort (0-based)
+    sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
-    pageSize: 25,          // 10 | 25 | 50 | 100 | 250 | 500 | 1000 | -1 (Tất cả)
-    searchQuery: ''
+    pageSize: 25,           // 10 | 25 | 50 | 100 | 250 | 500 | 1000 | -1 (Tất cả)
+    searchQuery: '',
+    searchColumn: 'all'     // 'all' | index cột cụ thể (0, 1, 2...)
 };
 
 // HÀM HIỂN THỊ SKELETON LOADING
@@ -184,6 +185,11 @@ function formatCellContent(val) {
 function renderTable() {
     if (!document.body || !currentData) return;
 
+    // Đọc cấu hình từ tab Style của Looker Studio (nếu có)
+    const styleConfig = currentData.style || {};
+    const showSearchConfig = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
+    const placeholderConfig = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) ? styleConfig.searchPlaceholder.value : 'Tìm mã, tên khách...';
+
     // Trích xuất headers
     const headers = [];
     const fields = currentData.fields || {};
@@ -199,12 +205,22 @@ function renderTable() {
     // Lấy toàn bộ rows từ data source (raw dataset)
     const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // 1. FILTER THEO TÌM KIẾM
+    // 1. FILTER THEO TÌM KIẾM (Hỗ trợ tìm theo cột cụ thể hoặc tất cả cột)
     let filteredRows = rawRows;
     if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
-        const q = tableState.searchQuery.trim().toLowerCase();
+        const words = tableState.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
         filteredRows = rawRows.filter(row => {
-            return row.some(cell => String(cell || '').toLowerCase().includes(q));
+            if (tableState.searchColumn === 'all') {
+                // Tất cả từ khóa phải tìm thấy ở đâu đó trong dòng
+                return words.every(word => {
+                    return row.some(cell => String(cell || '').toLowerCase().includes(word));
+                });
+            } else {
+                // Tìm kiếm trong cột cụ thể được chọn
+                const colIdx = Number(tableState.searchColumn);
+                const cellText = String(row[colIdx] || '').toLowerCase();
+                return words.every(word => cellText.includes(word));
+            }
         });
     }
 
@@ -253,25 +269,58 @@ function renderTable() {
     `;
     toolbarLeft.appendChild(btnExcel);
 
-    // Search Box with SVG Icon
-    const searchBox = document.createElement('div');
-    searchBox.className = 'search-box';
-    searchBox.innerHTML = `
-        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-    `;
+    // SEARCH GROUP (Search Input + Column Selector Dropdown)
+    if (showSearchConfig) {
+        const searchGroup = document.createElement('div');
+        searchGroup.className = 'search-group';
 
-    const searchInput = document.createElement('input');
-    searchInput.className = 'search-input';
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Tìm kiếm nhanh...';
-    searchInput.value = tableState.searchQuery;
-    searchInput.addEventListener('input', (e) => {
-        tableState.searchQuery = e.target.value;
-        tableState.currentPage = 1;
-        renderTable();
-    });
-    searchBox.appendChild(searchInput);
-    toolbarLeft.appendChild(searchBox);
+        // Dropdown chọn cột tìm kiếm (Tất cả cột | Cột 1 | Cột 2...)
+        const colSelect = document.createElement('select');
+        colSelect.className = 'search-column-select';
+        
+        const allOpt = document.createElement('option');
+        allOpt.value = 'all';
+        allOpt.textContent = 'Tất cả cột';
+        if (tableState.searchColumn === 'all') allOpt.selected = true;
+        colSelect.appendChild(allOpt);
+
+        headers.forEach((hName, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = hName;
+            if (String(tableState.searchColumn) === String(idx)) opt.selected = true;
+            colSelect.appendChild(opt);
+        });
+
+        colSelect.addEventListener('change', (e) => {
+            tableState.searchColumn = e.target.value;
+            tableState.currentPage = 1;
+            renderTable();
+        });
+        searchGroup.appendChild(colSelect);
+
+        // Input Box with Icon
+        const searchInputBox = document.createElement('div');
+        searchInputBox.className = 'search-input-box';
+        searchInputBox.innerHTML = `
+            <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        `;
+
+        const searchInput = document.createElement('input');
+        searchInput.className = 'search-input';
+        searchInput.type = 'text';
+        searchInput.placeholder = placeholderConfig;
+        searchInput.value = tableState.searchQuery;
+        searchInput.addEventListener('input', (e) => {
+            tableState.searchQuery = e.target.value;
+            tableState.currentPage = 1;
+            renderTable();
+        });
+        searchInputBox.appendChild(searchInput);
+        searchGroup.appendChild(searchInputBox);
+
+        toolbarLeft.appendChild(searchGroup);
+    }
 
     toolbar.appendChild(toolbarLeft);
 

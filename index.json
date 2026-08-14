@@ -10,7 +10,7 @@
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 10
+                        "max": 20
                     }
                 },
                 {
@@ -19,7 +19,7 @@
                     "type": "METRIC",
                     "options": {
                         "min": 0,
-                        "max": 10
+                        "max": 20
                     }
                 }
             ]
@@ -27,9 +27,22 @@
     ],
     "style": [
         {
-            "id": "general",
-            "label": "General",
-            "elements": []
+            "id": "searchSettings",
+            "label": "Cài đặt Tìm kiếm & Bảng",
+            "elements": [
+                {
+                    "id": "showSearch",
+                    "label": "Bật ô tìm kiếm nhanh",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "searchPlaceholder",
+                    "label": "Gợi ý tìm kiếm (Placeholder)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "Tìm mã, tên khách..."
+                }
+            ]
         }
     ]
 }

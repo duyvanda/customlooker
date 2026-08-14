@@ -84,8 +84,44 @@ body {
     fill: currentColor;
 }
 
-/* SEARCH INPUT WITH ICON */
-.search-box {
+/* SEARCH GROUP (SEARCH INPUT + COLUMN FILTER DROPDOWN) */
+.search-group {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background-color: #f8fafc;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.search-group:focus-within {
+    background-color: #ffffff;
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+}
+
+.search-column-select {
+    border: none;
+    background: transparent;
+    border-right: 1px solid #e2e8f0;
+    padding: 7px 8px 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #475569;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    max-width: 130px;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+.search-column-select:hover {
+    background-color: #f1f5f9;
+}
+
+.search-input-box {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -93,7 +129,7 @@ body {
 
 .search-icon-svg {
     position: absolute;
-    left: 10px;
+    left: 8px;
     width: 14px;
     height: 14px;
     color: #94a3b8;
@@ -101,27 +137,23 @@ body {
 }
 
 .search-input {
-    border: 1px solid #e2e8f0;
-    background-color: #f8fafc;
-    border-radius: 6px;
-    padding: 7px 12px 7px 30px;
+    border: none;
+    background: transparent;
+    padding: 7px 12px 7px 28px;
     font-size: 13px;
     color: #1e293b;
     outline: none;
-    transition: all 0.2s ease;
-    width: 200px;
+    width: 180px;
     font-family: inherit;
+    transition: width 0.2s ease;
 }
 
 .search-input::placeholder {
     color: #94a3b8;
 }
 
-.search-input:focus {
-    background-color: #ffffff;
-    border-color: #059669;
-    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
-    width: 250px;
+.search-group:focus-within .search-input {
+    width: 220px;
 }
 
 /* PAGE SIZE SELECT */
@@ -253,16 +285,6 @@ body {
 
 .preview-table tbody tr:hover {
     background-color: #f1f5f9 !important;
-}
-
-/* ROW INDEX COLUMN */
-.row-index {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 500;
-    text-align: center;
-    width: 42px;
-    user-select: none;
 }
 
 /* CLEAN MODERN BADGES */
