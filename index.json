@@ -1,22 +1,28 @@
 {
     "data": [
         {
-            "id": "dimensions",
-            "label": "Dimension",
-            "type": "DIMENSION",
-            "options": {
-                "min": 0,
-                "max": 50
-            }
-        },
-        {
-            "id": "metrics",
-            "label": "Metric",
-            "type": "METRIC",
-            "options": {
-                "min": 0,
-                "max": 50
-            }
+            "id": "concepts",
+            "label": "Data",
+            "elements": [
+                {
+                    "id": "dimensions",
+                    "label": "Dimension",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 50
+                    }
+                },
+                {
+                    "id": "metrics",
+                    "label": "Metric",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 50
+                    }
+                }
+            ]
         }
     ],
     "style": [
