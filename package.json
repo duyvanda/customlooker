@@ -1,0 +1,19 @@
+{
+  "name": "customlooker",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "dev": "webpack --config webpack.config.js --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/dscc": "^0.3.22",
+    "webpack": "^5.109.2",
+    "webpack-cli": "^7.2.2",
+    "xlsx": "^0.18.5"
+  }
+}

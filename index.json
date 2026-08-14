@@ -1,0 +1,35 @@
+{
+    "data": [
+        {
+            "id": "concepts",
+            "label": "Dữ liệu bảng",
+            "elements": [
+                {
+                    "id": "dimensions",
+                    "label": "Dimensions (Các cột chữ/ngày)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 10
+                    }
+                },
+                {
+                    "id": "metrics",
+                    "label": "Metrics (Các cột số liệu/doanh thu)",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 10
+                    }
+                }
+            ]
+        }
+    ],
+    "style": [
+        {
+            "id": "general",
+            "label": "General",
+            "elements": []
+        }
+    ]
+}

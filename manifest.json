@@ -1,0 +1,24 @@
+{
+    "name": "Custom Table with Excel Export",
+    "organization": "Duy Quang Data Solution",
+    "description": "Bảng dữ liệu custom tích hợp nút bấm export file Excel .xlsx trực tiếp.",
+    "logoUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/logo.png",
+    "companyUrl": "https://google.com",
+    "supportUrl": "https://google.com",
+    "components": [
+        {
+            "id": "excelExportTable",
+            "name": "Excel Export Table",
+            "description": "Kéo thả dimension và metric để tạo bảng dữ liệu có nút Export Excel.",
+            "iconUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/table.png",
+            "resource": {
+                "js": "gs://analytics_merap/excelchart2/index.bundle.js",
+                "css": "gs://analytics_merap/excelchart2/index.css",
+                "config": "gs://analytics_merap/excelchart2/index.json"
+            }
+        }
+    ],
+    "devMode": true,
+    "privacyPolicyUrl": "https://google.com",
+    "termsOfServiceUrl": "https://google.com"
+}
