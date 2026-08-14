@@ -12,7 +12,7 @@ let userColumnConfigs = null; // Cấu hình cột tùy biến
 let userConditionalRules = null; // Quy tắc tô màu động từ Modal
 
 let tableState = {
-    sortColumn: null,       // index trong activeColumns đang sort (0-based)
+    sortColumn: null,       // index trong activeColumns đang sort (0-based) hoặc null = theo Looker Studio Sort
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
     pageSize: 20,           // Mặc định 20 dòng/trang
@@ -786,6 +786,7 @@ function openColumnConfigModal() {
                 } catch (e) { }
                 userColumnConfigs = null;
                 userConditionalRules = [];
+                tableState.sortColumn = null;
                 overlay.remove();
                 renderTable();
             };
@@ -893,7 +894,7 @@ function renderTable() {
             });
         }
 
-        // 2. SORT DỮ LIỆU
+        // 2. SORT DỮ LIỆU (Tự động theo Looker Studio Sort nếu sortColumn === null)
         let sortedRows = [...filteredRows];
         if (tableState.sortColumn !== null && tableState.sortColumn >= 0 && tableState.sortColumn < activeColumns.length && activeColumns[tableState.sortColumn]) {
             const targetCol = activeColumns[tableState.sortColumn];
@@ -1040,9 +1041,16 @@ function renderTable() {
                 </div>
             `;
 
+            // 3-state sorting: Asc -> Desc -> Reset to Looker Studio default sort
             th.addEventListener('click', () => {
                 if (tableState.sortColumn === colIdx) {
-                    tableState.sortDirection = tableState.sortDirection === 'asc' ? 'desc' : 'asc';
+                    if (tableState.sortDirection === 'asc') {
+                        tableState.sortDirection = 'desc';
+                    } else {
+                        // Click lần 3: Reset về thứ tự sort mặc định của Looker Studio
+                        tableState.sortColumn = null;
+                        tableState.sortDirection = 'asc';
+                    }
                 } else {
                     tableState.sortColumn = colIdx;
                     tableState.sortDirection = 'asc';
@@ -1275,6 +1283,8 @@ function drawVisualization(data) {
         if (!document.body) return;
 
         currentData = data;
+        // Reset client sort để áp dụng ngay lập tức cấu hình Sort từ Setup panel của Looker Studio
+        tableState.sortColumn = null;
         renderTable();
 
     } catch (err) {
