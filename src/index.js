@@ -20,6 +20,16 @@ let tableState = {
     searchQuery: ''
 };
 
+// HỖ TRỢ KÍCH HOẠT FOCUS / CHỌN CHART KHI NHẤP CHUỘT Ở EDIT MODE
+try {
+    window.addEventListener('click', () => {
+        try { window.focus(); } catch (e) { }
+    });
+    window.addEventListener('mousedown', () => {
+        try { window.focus(); } catch (e) { }
+    });
+} catch (e) { }
+
 // HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT (AN TOÀN TUYỆT ĐỐI VỚI MỌI KIỂU DỮ LIỆU)
 function remove_accents(str) {
     if (str === null || str === undefined) return '';
