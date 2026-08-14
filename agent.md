@@ -107,35 +107,7 @@ Looker Studio (Google Data Studio) mặc định không hỗ trợ nút bấm tr
 - **Bảo toàn số 0 ở đầu:** Với các chuỗi bắt đầu bằng `0` và có từ 2 ký tự số trở lên (như số điện thoại `0912345678`, mã nhân viên `0012`...), ô Excel luôn được thiết lập `t: 's'` (Text) kèm format `@` (`z: '@'`), ngăn chặn tuyệt đối tình trạng Excel tự đổi thành số và làm mất số 0.
 - **Tự động mở rộng cột:** Tự động tính toán độ dài lớn nhất của text trong từng cột để đặt `ws['!cols'] = [{ wch: maxLen + 3 }]`.
 - **Date Range nguyên bản:** Nhận nguyên bản `data.dateRanges.DEFAULT` từ Looker Studio API (`start` & `end`), hiển thị dạng JSON và có nút sao chép tiện lợi.
-
----
-
-### 3.5. 🛡️ Phân Tích Kỹ Thuật: Cơ Chế Xuất File, Giới Hạn Sandbox & Vấn Đề Android WebView
-
-#### A. Giới hạn `allow-downloads` trong Iframe của Google Looker Studio:
-- Google Looker Studio nhúng Community Visualization trong một iframe bảo mật nghiêm ngặt và **cố tình không cấp cờ `allow-downloads`**.
-- Nếu thực hiện tải file trực tiếp tại chỗ bằng `<a>.click()` hoặc `Blob` bên trong iframe, trình duyệt Chromium sẽ chặn với thông báo:
-  ```
-  Download is disallowed. The frame initiating or instantiating the download is sandboxed, but the flag 'allow-downloads' is not set.
-  ```
-- **Giải pháp xử lý chuẩn:** Sử dụng cơ chế mở tab helper [`downloader.html`](file:///D:/customLooker/downloader.html) qua `window.open()`. Vì `downloader.html` là một tab cấp cao nhất (Top-level window context), nó hoàn toàn thoát khỏi môi trường sandbox của iframe và tải file `.xlsx` về máy bình thường.
-
-#### B. Vấn đề trên Android App (In-App WebView):
-- **Hiện tượng:** Khi báo cáo Looker Studio được nhúng vào một Ứng dụng di động Android (Android WebView, Flutter WebView, React Native WebView...), khi bấm nút Xuất Excel, tab `downloader.html` mở lên nhưng bị quay vòng vô tận (Loading mãi).
-- **Nguyên nhân cốt lõi:**
-  - Android WebView mặc định cô lập các cửa sổ được mở bởi `window.open` thành các context độc lập và ngắt đứt liên lạc `postMessage` giữa 2 cửa sổ.
-  - Khi đó, dữ liệu bảng từ Looker Studio không thể truyền sang tab `downloader.html`, khiến màn hình chờ không nhận được dữ liệu.
-- **Các giải pháp khắc phục triệt để:**
-  1. **Dành cho Người Dùng Cuối (End-user Workaround):**
-     - Mở báo cáo bằng trình duyệt di động chuẩn (**Google Chrome** trên Android hoặc **Safari** trên iOS) thay vì xem qua WebView nhúng của App. Trên Chrome/Safari mobile, tính năng tải file hoạt động 100% mượt mà.
-  2. **Dành cho Lập Trình Viên Ứng Dụng (Android App Devs):**
-     - Trong mã nguồn Native của App Android, cần cấu hình WebView hỗ trợ đa cửa sổ và WebChromeClient:
-       ```kotlin
-       webView.settings.setSupportMultipleWindows(true)
-       webView.settings.javaScriptCanOpenWindowsAutomatically = true
-       webView.webChromeClient = WebChromeClient()
-       ```
-       Khi cấu hình này được kích hoạt, Android WebView sẽ duy trì kênh truyền thông `postMessage` giữa 2 cửa sổ và cho phép tải file Excel bình thường.
+- **Tài liệu phân tích chuyên sâu:** Chi tiết về giới hạn sandbox `allow-downloads` và giải pháp cho Android WebView xem tại file riêng: [`EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md`](file:///D:/customLooker/EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md).
 
 ---
 
@@ -155,6 +127,7 @@ D:\customLooker/
 ├── customLooker.zip          # Gói nén toàn bộ dự án
 ├── changelog/                # Thư mục nhật ký thay đổi và Walkthrough
 │   └── 20260814_204747_walkthrough.md # Nhật ký phiên làm việc
+├── EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md # Tài liệu chuyên sâu về Sandbox & Android WebView
 └── agent.md                  # Tài liệu toàn diện quy tắc & hướng dẫn (File này)
 ```
 
@@ -177,7 +150,7 @@ npm run build
 
 # 2. Xóa zip cũ và nén gói zip mới
 Remove-Item -Path "D:\customLooker\customLooker.zip" -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path "src", "downloader.html", "index.css", "index.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.js", "agent.md", "changelog" -DestinationPath "D:\customLooker\customLooker.zip" -Force
+Compress-Archive -Path "src", "downloader.html", "index.css", "index.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.js", "agent.md", "EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md", "changelog" -DestinationPath "D:\customLooker\customLooker.zip" -Force
 ```
 
 ### 5.3. Lệnh Triển Khai Lên Google Cloud Storage (GCS)
