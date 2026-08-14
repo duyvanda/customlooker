@@ -1,22 +1,20 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình trên localStorage
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom';
-const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom';
+// Khóa lưu trữ cấu hình cột trên localStorage
+const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v2';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
 let currentData = null;
-let userColumnConfigs = null; // Cấu hình cột tùy biến
-let userConditionalRules = []; // Quy tắc tô màu động
+let userColumnConfigs = null; // Cấu hình cột tùy biến (được lưu trữ và đồng bộ liên tục)
 
 let tableState = {
     sortColumn: null,       // index trong columns đang sort (0-based)
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
-    pageSize: 20,           // Mặc định
-    lastAdminPageSize: null,// Ghi nhận giá trị Admin set trong Style tab
+    pageSize: 20,           // Mặc định 20 dòng/trang
+    lastAdminPageSize: null,
     searchQuery: ''
 };
 
@@ -169,57 +167,31 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM ÁP DỤNG QUY TẮC ĐIỀU KIỆN ĐỘNG (CONDITIONAL RULES EVALUATOR)
-function evaluateConditionalRules(fieldName, val, rules) {
-    if (!rules || !Array.isArray(rules) || rules.length === 0) return null;
-    if (val === null || val === undefined) return null;
+// HÀM BÓC TÁCH CÁC QUY TẮC MÀU & BADGES TỪ STYLE PANEL (ADMIN SETUP)
+function getStyleRules(styleConfig) {
+    const parseKeywords = (val, defaultVal = '') => {
+        const raw = (val !== undefined && val !== null && String(val).trim() !== '') ? String(val) : defaultVal;
+        return raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    };
 
-    const str = String(val).trim();
-    const strLower = str.toLowerCase();
-    const isNum = isNumericValue(val);
-    const num = isNum ? Number(val) : NaN;
-
-    for (const rule of rules) {
-        if (rule.field !== '*' && rule.field !== fieldName) continue;
-
-        let matched = false;
-        const targetVal = (rule.value || '').trim();
-        const targetLower = targetVal.toLowerCase();
-        const targetNum = Number(targetVal);
-
-        if (rule.operator === 'contains') {
-            matched = strLower.includes(targetLower);
-        } else if (rule.operator === 'equals') {
-            matched = strLower === targetLower;
-        } else if (rule.operator === 'startsWith') {
-            matched = strLower.startsWith(targetLower);
-        } else if (rule.operator === 'pos') {
-            matched = isNum && num >= 0;
-        } else if (rule.operator === 'neg') {
-            matched = isNum && num < 0;
-        } else if (isNum && !isNaN(targetNum)) {
-            if (rule.operator === '>') matched = num > targetNum;
-            else if (rule.operator === '<') matched = num < targetNum;
-            else if (rule.operator === '>=') matched = num >= targetNum;
-            else if (rule.operator === '<=') matched = num <= targetNum;
-            else if (rule.operator === '==') matched = num === targetNum;
-        }
-
-        if (matched) {
-            return rule.style;
-        }
-    }
-
-    return null;
+    return {
+        successList: parseKeywords(styleConfig.successKeywords?.value, 'done, active, thành công, hoàn tất, đạt'),
+        dangerList: parseKeywords(styleConfig.dangerKeywords?.value, 'off, fail, failed, cancel, hủy, thất bại, late'),
+        warningList: parseKeywords(styleConfig.warningKeywords?.value, 'pending, chờ xử lý, đang xử lý, warning'),
+        infoList: parseKeywords(styleConfig.infoKeywords?.value, 'ch-replace, staging, info'),
+        grayList: parseKeywords(styleConfig.grayKeywords?.value, 'none, null, n/a'),
+        highlightPosNeg: styleConfig.highlightPosNeg?.value === true
+    };
 }
 
-// HÀM FORMAT CELL VÀ ÁP DỤNG MÀU SẮC ĐỘNG
-function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', dynamicRules = []) {
+// HÀM FORMAT CELL VỚI CÁC QUY TẮC MÀU SẮC TỪ ADMIN SETUP
+function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', styleRules = {}) {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
 
     const str = String(val).trim();
+    const lowerVal = str.toLowerCase();
     const isNum = isNumericValue(val);
     const num = isNum ? Number(val) : NaN;
 
@@ -255,26 +227,31 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         formattedVal = formatDateValue(str, 'date');
     }
 
-    // 2. KIỂM TRA QUY TẮC MÀU ĐỘNG DO NGƯỜI DÙNG CẤU HÌNH (Ưu tiên số 1)
-    const ruleStyle = evaluateConditionalRules(fieldName, val, dynamicRules);
-    if (ruleStyle) {
-        if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
-        if (ruleStyle === 'badge_danger') return `<span class="badge badge-danger">✕ ${str}</span>`;
-        if (ruleStyle === 'badge_warning') return `<span class="badge badge-warning">⏳ ${str}</span>`;
-        if (ruleStyle === 'badge_info') return `<span class="badge badge-info">${str}</span>`;
-        if (ruleStyle === 'badge_gray') return `<span class="badge badge-default">${str}</span>`;
-        if (ruleStyle === 'color_green') return `<span class="color-green">${formattedVal}</span>`;
-        if (ruleStyle === 'color_red') return `<span class="color-red">${formattedVal}</span>`;
-        if (ruleStyle === 'color_amber') return `<span class="color-amber">${formattedVal}</span>`;
-        if (ruleStyle === 'color_cyan') return `<span class="color-cyan">${formattedVal}</span>`;
-        if (ruleStyle === 'color_pos_neg') {
-            return (isNum && num < 0)
-                ? `<span class="color-pos-neg-neg">${formattedVal}</span>`
-                : `<span class="color-pos-neg-pos">${formattedVal}</span>`;
-        }
+    // 2. CHECK ADMIN KEYWORD BADGES TỪ STYLE PANEL (LOOKER STUDIO)
+    if (styleRules.successList && styleRules.successList.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
+        return `<span class="badge badge-success">✓ ${str}</span>`;
+    }
+    if (styleRules.dangerList && styleRules.dangerList.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
+        return `<span class="badge badge-danger">✕ ${str}</span>`;
+    }
+    if (styleRules.warningList && styleRules.warningList.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
+        return `<span class="badge badge-warning">⏳ ${str}</span>`;
+    }
+    if (styleRules.infoList && styleRules.infoList.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
+        return `<span class="badge badge-info">${str}</span>`;
+    }
+    if (styleRules.grayList && styleRules.grayList.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
+        return `<span class="badge badge-default">${str}</span>`;
     }
 
-    // 3. MÀU SẮC CỐ ĐỊNH CỦA CỘT (Nếu được chọn trong Modal)
+    // 3. CHECK SỐ DƯƠNG / SỐ ÂM TỰ ĐỘNG
+    if (styleRules.highlightPosNeg && isNum) {
+        return num >= 0
+            ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
+            : `<span class="color-pos-neg-neg">${formattedVal}</span>`;
+    }
+
+    // 4. MÀU CỘT CỐ ĐỊNH (Nếu được chọn trong Modal)
     if (colColor === 'pos_green_neg_red' && isNum) {
         return num >= 0
             ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
@@ -354,15 +331,9 @@ function extractDisplayFields(currentData) {
     return displayFields;
 }
 
-// HÀM LẤY CẤU HÌNH CỘT ĐÃ CẤU HÌNH TỪ LOCALSTORAGE
-function getMergedColumnConfigs(displayFields) {
-    let savedConfigs = null;
-    try {
-        const stored = localStorage.getItem(USER_CONFIG_STORAGE_KEY);
-        if (stored) savedConfigs = JSON.parse(stored);
-    } catch (e) { }
-
-    if (!savedConfigs || !Array.isArray(savedConfigs)) {
+// HÀM ĐỒNG BỘ CẤU HÌNH CỘT VỚI DỮ LIỆU SCHEMA (GIỮ NGUYÊN THỨ TỰ & TRẠNG THÁI ẨN/HIỆN ĐÃ LƯU)
+function syncColumnConfigsWithFields(existingConfigs, displayFields) {
+    if (!existingConfigs || !Array.isArray(existingConfigs) || existingConfigs.length === 0) {
         return displayFields.map((df, idx) => ({
             id: df.id || `col_${idx}`,
             field: df.name || df.id || `col_${idx}`,
@@ -377,21 +348,21 @@ function getMergedColumnConfigs(displayFields) {
     const result = [];
     const usedRawIndices = new Set();
 
-    savedConfigs.forEach(sc => {
+    // 1. Giữ nguyên toàn bộ cấu hình đã tùy chỉnh theo đúng thứ tự hiện có
+    existingConfigs.forEach(ec => {
         const matchedDf = displayFields.find(df => 
-            !usedRawIndices.has(df.rawIndex) && ((df.id && df.id === sc.id) || df.name === sc.field)
+            !usedRawIndices.has(df.rawIndex) && (df.name === ec.field || df.id === ec.id)
         );
         if (matchedDf) {
             usedRawIndices.add(matchedDf.rawIndex);
             result.push({
-                ...sc,
-                id: matchedDf.id,
-                field: matchedDf.name,
+                ...ec,
                 rawIndex: matchedDf.rawIndex
             });
         }
     });
 
+    // 2. Thêm các cột mới phát sinh trong Looker Studio mà chưa có trong cấu hình
     displayFields.forEach((df, idx) => {
         if (!usedRawIndices.has(df.rawIndex)) {
             usedRawIndices.add(df.rawIndex);
@@ -410,16 +381,18 @@ function getMergedColumnConfigs(displayFields) {
     return result;
 }
 
-// HÀM LẤY QUY TẮC MÀU ĐỘNG TỪ LOCALSTORAGE
-function loadConditionalRules() {
+// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU TỪ LOCALSTORAGE
+function loadStoredColumnConfigs(displayFields) {
+    let saved = null;
     try {
-        const stored = localStorage.getItem(USER_RULES_STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
+        const item = localStorage.getItem(USER_CONFIG_STORAGE_KEY);
+        if (item) saved = JSON.parse(item);
     } catch (e) { }
-    return [];
+
+    return syncColumnConfigsWithFields(saved, displayFields);
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG (TABLE COLUMN CONFIG MODAL)
 function openColumnConfigModal() {
     if (!currentData) return;
     const displayFields = extractDisplayFields(currentData);
@@ -428,9 +401,7 @@ function openColumnConfigModal() {
         return;
     }
 
-    let activeTab = 'columns';
-    let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || getMergedColumnConfigs(displayFields)));
-    let workingRules = JSON.parse(JSON.stringify(userConditionalRules || loadConditionalRules()));
+    let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || loadStoredColumnConfigs(displayFields)));
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -440,143 +411,67 @@ function openColumnConfigModal() {
         overlay.innerHTML = `
             <div class="modal-dialog">
                 <div class="modal-header">
-                    <div class="modal-nav-tabs">
-                        <button class="modal-tab-btn ${activeTab === 'columns' ? 'active' : ''}" id="tab-btn-columns">
-                            📋 Cấu Hình Cột (${workingConfigs.length})
-                        </button>
-                        <button class="modal-tab-btn ${activeTab === 'rules' ? 'active' : ''}" id="tab-btn-rules">
-                            🎨 Quy Tắc Tô Màu & Badge Động (${workingRules.length})
-                        </button>
+                    <div class="modal-title" style="font-weight:700; color:#1e293b; font-size:14px; display:flex; align-items:center; gap:8px;">
+                        <span>⚙️ Tùy Chỉnh Cột Bảng (Ẩn/Hiện, Tên, Định Dạng & Thứ Tự)</span>
                     </div>
                     <button class="modal-close-btn" id="btn-close-modal">✕</button>
                 </div>
                 
                 <div class="modal-body">
-                    ${activeTab === 'columns' ? `
-                        <table class="col-config-table">
-                            <thead>
+                    <table class="col-config-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px; text-align:center;">STT</th>
+                                <th style="width:70px; text-align:center;">Hiện</th>
+                                <th style="width:170px;">Tên gốc Looker/BQ</th>
+                                <th style="width:210px;">Tên hiển thị (Label)</th>
+                                <th style="width:170px;">Định dạng (Format)</th>
+                                <th style="width:160px;">Màu cột (Color)</th>
+                                <th style="width:90px; text-align:center;">Thứ tự</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${workingConfigs.map((col, idx) => `
                                 <tr>
-                                    <th style="width:40px; text-align:center;">STT</th>
-                                    <th style="width:70px; text-align:center;">Hiện</th>
-                                    <th style="width:160px;">Tên gốc Looker/BQ</th>
-                                    <th style="width:200px;">Tên hiển thị (Label)</th>
-                                    <th style="width:170px;">Định dạng (Format)</th>
-                                    <th style="width:160px;">Màu cột (Color)</th>
-                                    <th style="width:90px; text-align:center;">Thứ tự</th>
+                                    <td style="text-align:center; color:#94a3b8; font-weight:600;">${idx + 1}</td>
+                                    <td style="text-align:center;">
+                                        <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
+                                    </td>
+                                    <td style="font-family:'JetBrains Mono',monospace; color:#475569; font-size:11px;">${col.field}</td>
+                                    <td>
+                                        <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
+                                    </td>
+                                    <td>
+                                        <select class="col-config-select col-fmt-sel" data-idx="${idx}">
+                                            <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
+                                            <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
+                                            <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
+                                            <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
+                                            <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
+                                            <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
+                                            <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
+                                            <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
+                                            <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="col-config-select col-color-sel" data-idx="${idx}">
+                                            <option value="default" ${col.color === 'default' ? 'selected' : ''}>Mặc định</option>
+                                            <option value="pos_green_neg_red" ${col.color === 'pos_green_neg_red' ? 'selected' : ''}>Dương Xanh / Âm Đỏ</option>
+                                            <option value="green" ${col.color === 'green' ? 'selected' : ''}>Xanh Lá (Green)</option>
+                                            <option value="red" ${col.color === 'red' ? 'selected' : ''}>Đỏ (Red)</option>
+                                            <option value="amber" ${col.color === 'amber' ? 'selected' : ''}>Vàng Cam (Amber)</option>
+                                            <option value="cyan" ${col.color === 'cyan' ? 'selected' : ''}>Xanh Dương (Cyan)</option>
+                                        </select>
+                                    </td>
+                                    <td style="text-align:center; white-space:nowrap;">
+                                        <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
+                                        <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${workingConfigs.map((col, idx) => `
-                                    <tr>
-                                        <td style="text-align:center; color:#94a3b8; font-weight:600;">${idx + 1}</td>
-                                        <td style="text-align:center;">
-                                            <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
-                                        </td>
-                                        <td style="font-family:'JetBrains Mono',monospace; color:#475569; font-size:11px;">${col.field}</td>
-                                        <td>
-                                            <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
-                                        </td>
-                                        <td>
-                                            <select class="col-config-select col-fmt-sel" data-idx="${idx}">
-                                                <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
-                                                <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
-                                                <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
-                                                <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
-                                                <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
-                                                <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
-                                                <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
-                                                <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
-                                                <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="col-config-select col-color-sel" data-idx="${idx}">
-                                                <option value="default" ${col.color === 'default' ? 'selected' : ''}>Mặc định</option>
-                                                <option value="pos_green_neg_red" ${col.color === 'pos_green_neg_red' ? 'selected' : ''}>Dương Xanh / Âm Đỏ</option>
-                                                <option value="green" ${col.color === 'green' ? 'selected' : ''}>Xanh Lá (Green)</option>
-                                                <option value="red" ${col.color === 'red' ? 'selected' : ''}>Đỏ (Red)</option>
-                                                <option value="amber" ${col.color === 'amber' ? 'selected' : ''}>Vàng Cam (Amber)</option>
-                                                <option value="cyan" ${col.color === 'cyan' ? 'selected' : ''}>Xanh Dương (Cyan)</option>
-                                            </select>
-                                        </td>
-                                        <td style="text-align:center; white-space:nowrap;">
-                                            <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
-                                            <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    ` : `
-                        <div>
-                            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
-                                💡 Thiết lập các quy tắc để tự động gắn <strong>Thẻ Badge</strong> hoặc <strong>Tô Màu Chữ</strong> theo từ khóa, điều kiện so sánh cho bất kỳ cột nào trên bảng.
-                            </div>
-                            <table class="col-config-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width:160px;">Cột áp dụng</th>
-                                        <th style="width:170px;">Điều kiện</th>
-                                        <th style="width:180px;">Giá trị / Từ khóa</th>
-                                        <th style="width:200px;">Kiểu hiển thị</th>
-                                        <th style="width:50px; text-align:center;">Xóa</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${workingRules.length === 0 ? `
-                                        <tr>
-                                            <td colspan="5" style="text-align:center; padding:30px; color:#94a3b8;">
-                                                Chưa có quy tắc tô màu nào. Bấm nút bên dưới để thêm quy tắc mới!
-                                            </td>
-                                        </tr>
-                                    ` : workingRules.map((rule, rIdx) => `
-                                        <tr>
-                                            <td>
-                                                <select class="col-config-select rule-field-sel" data-idx="${rIdx}">
-                                                    <option value="*" ${rule.field === '*' ? 'selected' : ''}>★ Tất cả cột</option>
-                                                    ${workingConfigs.map(c => `<option value="${c.field}" ${rule.field === c.field ? 'selected' : ''}>${c.title || c.field}</option>`).join('')}
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select class="col-config-select rule-op-sel" data-idx="${rIdx}">
-                                                    <option value="contains" ${rule.operator === 'contains' ? 'selected' : ''}>Chứa từ khóa (Contains)</option>
-                                                    <option value="equals" ${rule.operator === 'equals' ? 'selected' : ''}>Bằng chính xác (Equals)</option>
-                                                    <option value="startsWith" ${rule.operator === 'startsWith' ? 'selected' : ''}>Bắt đầu bằng (Starts with)</option>
-                                                    <option value="pos" ${rule.operator === 'pos' ? 'selected' : ''}>Số dương (>= 0)</option>
-                                                    <option value="neg" ${rule.operator === 'neg' ? 'selected' : ''}>Số âm (< 0)</option>
-                                                    <option value=">" ${rule.operator === '>' ? 'selected' : ''}>Lớn hơn (>)</option>
-                                                    <option value="<" ${rule.operator === '<' ? 'selected' : ''}>Nhỏ hơn (<)</option>
-                                                    <option value=">=" ${rule.operator === '>=' ? 'selected' : ''}>Lớn hơn hoặc bằng (>=)</option>
-                                                    <option value="<=" ${rule.operator === '<=' ? 'selected' : ''}>Nhỏ hơn hoặc bằng (<=)</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <input type="text" class="col-config-input rule-val-inp" data-idx="${rIdx}" placeholder="vd: OFF, Staging, Done, 1000..." value="${rule.value || ''}" ${['pos', 'neg'].includes(rule.operator) ? 'disabled style="background:#f1f5f9;"' : ''}>
-                                            </td>
-                                            <td>
-                                                <select class="col-config-select rule-style-sel" data-idx="${rIdx}">
-                                                    <option value="badge_success" ${rule.style === 'badge_success' ? 'selected' : ''}>🏷️ Badge Xanh Lá (✓ Success)</option>
-                                                    <option value="badge_danger" ${rule.style === 'badge_danger' ? 'selected' : ''}>🏷️ Badge Đỏ (✕ Danger)</option>
-                                                    <option value="badge_warning" ${rule.style === 'badge_warning' ? 'selected' : ''}>🏷️ Badge Vàng (⏳ Warning)</option>
-                                                    <option value="badge_info" ${rule.style === 'badge_info' ? 'selected' : ''}>🏷️ Badge Xanh Dương (Info)</option>
-                                                    <option value="badge_gray" ${rule.style === 'badge_gray' ? 'selected' : ''}>🏷️ Badge Xám (Gray)</option>
-                                                    <option value="color_green" ${rule.style === 'color_green' ? 'selected' : ''}>🎨 Chữ Xanh Lá</option>
-                                                    <option value="color_red" ${rule.style === 'color_red' ? 'selected' : ''}>🎨 Chữ Đỏ</option>
-                                                    <option value="color_amber" ${rule.style === 'color_amber' ? 'selected' : ''}>🎨 Chữ Vàng Cam</option>
-                                                    <option value="color_cyan" ${rule.style === 'color_cyan' ? 'selected' : ''}>🎨 Chữ Xanh Dương</option>
-                                                    <option value="color_pos_neg" ${rule.style === 'color_pos_neg' ? 'selected' : ''}>🎨 Dương Xanh / Âm Đỏ</option>
-                                                </select>
-                                            </td>
-                                            <td style="text-align:center;">
-                                                <button class="btn-del-rule" data-idx="${rIdx}" title="Xóa quy tắc này">🗑️</button>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                            <button class="btn-add-rule" id="btn-add-rule">+ Thêm Quy Tắc Màu / Badge Mới</button>
-                        </div>
-                    `}
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
                 
                 <div class="modal-footer">
@@ -589,135 +484,68 @@ function openColumnConfigModal() {
             </div>
         `;
 
-        overlay.querySelector('#tab-btn-columns').onclick = () => { activeTab = 'columns'; renderModalContent(); };
-        overlay.querySelector('#tab-btn-rules').onclick = () => { activeTab = 'rules'; renderModalContent(); };
         overlay.querySelector('#btn-close-modal').onclick = () => overlay.remove();
         overlay.querySelector('#btn-cancel-modal').onclick = () => overlay.remove();
 
-        if (activeTab === 'columns') {
-            overlay.querySelectorAll('.col-vis-chk').forEach(chk => {
-                chk.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingConfigs[idx].visible = e.target.checked;
-                };
-            });
-
-            overlay.querySelectorAll('.col-title-inp').forEach(inp => {
-                inp.oninput = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingConfigs[idx].title = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.col-fmt-sel').forEach(sel => {
-                sel.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingConfigs[idx].format = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.col-color-sel').forEach(sel => {
-                sel.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingConfigs[idx].color = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.btn-move-up').forEach(btn => {
-                btn.onclick = (e) => {
-                    const idx = Number(e.currentTarget.dataset.idx);
-                    if (idx > 0) {
-                        const temp = workingConfigs[idx];
-                        workingConfigs[idx] = workingConfigs[idx - 1];
-                        workingConfigs[idx - 1] = temp;
-                        renderModalContent();
-                    }
-                };
-            });
-
-            overlay.querySelectorAll('.btn-move-down').forEach(btn => {
-                btn.onclick = (e) => {
-                    const idx = Number(e.currentTarget.dataset.idx);
-                    if (idx < workingConfigs.length - 1) {
-                        const temp = workingConfigs[idx];
-                        workingConfigs[idx] = workingConfigs[idx + 1];
-                        workingConfigs[idx + 1] = temp;
-                        renderModalContent();
-                    }
-                };
-            });
-        }
-
-        if (activeTab === 'rules') {
-            const addRuleBtn = overlay.querySelector('#btn-add-rule');
-            if (addRuleBtn) {
-                addRuleBtn.onclick = () => {
-                    workingRules.push({
-                        field: '*',
-                        operator: 'contains',
-                        value: '',
-                        style: 'badge_success'
-                    });
-                    renderModalContent();
-                };
+        // Lưu lại input hiện tại trước khi move
+        function syncInputsBeforeMove() {
+            for (let idx = 0; idx < workingConfigs.length; idx++) {
+                const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
+                const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
+                const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
+                const colorSel = overlay.querySelector(`.col-color-sel[data-idx="${idx}"]`);
+                if (chk) workingConfigs[idx].visible = chk.checked;
+                if (titleInp) workingConfigs[idx].title = titleInp.value;
+                if (fmtSel) workingConfigs[idx].format = fmtSel.value;
+                if (colorSel) workingConfigs[idx].color = colorSel.value;
             }
-
-            overlay.querySelectorAll('.rule-field-sel').forEach(sel => {
-                sel.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingRules[idx].field = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.rule-op-sel').forEach(sel => {
-                sel.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingRules[idx].operator = e.target.value;
-                    renderModalContent();
-                };
-            });
-
-            overlay.querySelectorAll('.rule-val-inp').forEach(inp => {
-                inp.oninput = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingRules[idx].value = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.rule-style-sel').forEach(sel => {
-                sel.onchange = (e) => {
-                    const idx = Number(e.target.dataset.idx);
-                    workingRules[idx].style = e.target.value;
-                };
-            });
-
-            overlay.querySelectorAll('.btn-del-rule').forEach(btn => {
-                btn.onclick = (e) => {
-                    const idx = Number(e.currentTarget.dataset.idx);
-                    workingRules.splice(idx, 1);
-                    renderModalContent();
-                };
-            });
         }
 
+        overlay.querySelectorAll('.btn-move-up').forEach(btn => {
+            btn.onclick = (e) => {
+                syncInputsBeforeMove();
+                const idx = Number(e.currentTarget.dataset.idx);
+                if (idx > 0) {
+                    const temp = workingConfigs[idx];
+                    workingConfigs[idx] = workingConfigs[idx - 1];
+                    workingConfigs[idx - 1] = temp;
+                    renderModalContent();
+                }
+            };
+        });
+
+        overlay.querySelectorAll('.btn-move-down').forEach(btn => {
+            btn.onclick = (e) => {
+                syncInputsBeforeMove();
+                const idx = Number(e.currentTarget.dataset.idx);
+                if (idx < workingConfigs.length - 1) {
+                    const temp = workingConfigs[idx];
+                    workingConfigs[idx] = workingConfigs[idx + 1];
+                    workingConfigs[idx + 1] = temp;
+                    renderModalContent();
+                }
+            };
+        });
+
+        // Reset toàn bộ về mặc định
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
-                localStorage.removeItem(USER_RULES_STORAGE_KEY);
             } catch (e) { }
             userColumnConfigs = null;
-            userConditionalRules = [];
             overlay.remove();
             renderTable();
         };
 
+        // Lưu & Áp Dụng (Đọc trực tiếp từ DOM)
         overlay.querySelector('#btn-save-modal').onclick = () => {
+            syncInputsBeforeMove();
             userColumnConfigs = workingConfigs;
-            userConditionalRules = workingRules;
             try {
                 localStorage.setItem(USER_CONFIG_STORAGE_KEY, JSON.stringify(userColumnConfigs));
-                localStorage.setItem(USER_RULES_STORAGE_KEY, JSON.stringify(userConditionalRules));
-            } catch (e) { }
+            } catch (e) {
+                console.warn('Save localStorage error:', e);
+            }
             overlay.remove();
             renderTable();
         };
@@ -746,12 +574,14 @@ function renderTable() {
     const showSearch = styleConfig.showSearch?.value !== false;
     const showColConfig = styleConfig.showColConfig?.value !== false;
 
+    // Bóc tách quy tắc màu & badges từ Style panel
+    const styleRules = getStyleRules(styleConfig);
+
     // ĐỒNG BỘ DEFAULT PAGE SIZE TỪ ADMIN SETUP TRONG LOOKER STUDIO
     const adminDefaultPageSize = (styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined)
         ? Number(styleConfig.defaultPageSize.value)
         : 20;
 
-    // Nếu Admin thay đổi cấu hình trong Looker Studio panel hoặc lần render đầu
     if (tableState.lastAdminPageSize !== adminDefaultPageSize) {
         tableState.lastAdminPageSize = adminDefaultPageSize;
         tableState.pageSize = adminDefaultPageSize;
@@ -762,15 +592,20 @@ function renderTable() {
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // Trích xuất CHỈ các cột cần hiển thị
+    // Trích xuất CHỈ các cột cần hiển thị (Dimensions + Metrics)
     const displayFields = extractDisplayFields(currentData);
 
-    userColumnConfigs = getMergedColumnConfigs(displayFields);
-    userConditionalRules = loadConditionalRules();
+    // Đồng bộ cấu hình cột với dữ liệu hiện tại
+    if (!userColumnConfigs) {
+        userColumnConfigs = loadStoredColumnConfigs(displayFields);
+    } else {
+        userColumnConfigs = syncColumnConfigsWithFields(userColumnConfigs, displayFields);
+    }
 
+    // Lọc ra các cột được phép hiển thị (visible !== false)
     const activeColumns = userColumnConfigs.filter(c => c.visible !== false);
 
-    // Xác định các cột tìm kiếm
+    // Xác định các cột tìm kiếm (searchFields được kéo vào Setup)
     const designatedSearchIndices = [];
     const designatedSearchNames = [];
     if (fields.searchFields && Array.isArray(fields.searchFields) && fields.searchFields.length > 0) {
@@ -858,7 +693,7 @@ function renderTable() {
     if (showColConfig) {
         const btnColConfig = document.createElement('button');
         btnColConfig.className = 'btn-col-config';
-        btnColConfig.innerHTML = `<span>⚙️ Cột Bảng & Màu Sắc</span>`;
+        btnColConfig.innerHTML = `<span>⚙️ Cột Bảng</span>`;
         btnColConfig.onclick = openColumnConfigModal;
         toolbarLeft.appendChild(btnColConfig);
     }
@@ -998,7 +833,8 @@ function renderTable() {
 
                 if (textWrap) td.classList.add('text-wrap-cell');
 
-                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules);
+                // Áp dụng format và style rules từ Style panel
+                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, styleRules);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);

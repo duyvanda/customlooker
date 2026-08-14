@@ -106,6 +106,48 @@
             ]
         },
         {
+            "id": "conditionalBadges",
+            "label": "🎨 Tô Màu & Badge Trạng Thái (Admin Setup)",
+            "elements": [
+                {
+                    "id": "successKeywords",
+                    "label": "Từ khóa Badge Xanh Lá (✓ Success)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "Done, Active, Thành công, Hoàn tất, Đạt"
+                },
+                {
+                    "id": "dangerKeywords",
+                    "label": "Từ khóa Badge Đỏ (✕ Danger)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "OFF, Fail, Failed, Cancel, Hủy, Thất bại, Late"
+                },
+                {
+                    "id": "warningKeywords",
+                    "label": "Từ khóa Badge Vàng (⏳ Warning)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "Pending, Chờ xử lý, Đang xử lý, Warning"
+                },
+                {
+                    "id": "infoKeywords",
+                    "label": "Từ khóa Badge Xanh Dương (Info)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "CH-replace, Staging, Info"
+                },
+                {
+                    "id": "grayKeywords",
+                    "label": "Từ khóa Badge Xám (Gray)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "None, Null, N/A"
+                },
+                {
+                    "id": "highlightPosNeg",
+                    "label": "Tự động tô màu Số dương Xanh / Số âm Đỏ",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                }
+            ]
+        },
+        {
             "id": "tableFeatures",
             "label": "Tính năng Bảng",
             "elements": [
@@ -117,7 +159,7 @@
                 },
                 {
                     "id": "showColConfig",
-                    "label": "Bật nút Tùy chỉnh Cột (⚙️ Cột Bảng & Màu Sắc)",
+                    "label": "Bật nút Tùy chỉnh Cột (⚙️ Cột Bảng)",
                     "type": "CHECKBOX",
                     "defaultValue": true
                 },
