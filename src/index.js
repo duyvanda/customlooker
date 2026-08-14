@@ -504,7 +504,7 @@ function extractDisplayFields(currentData) {
     return displayFields;
 }
 
-// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (GIỮ NGUYÊN THỨ TỰ, ẨN/HIỆN, TÌM KIẾM ĐÃ LƯU)
+// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (MẶC ĐỊNH SEARCHABLE = FALSE (UNCHECK ALL), CHỈ TRUE NẾU NGƯỜI DÙNG TÍCH CHỌN)
 function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     if (!displayFields || !Array.isArray(displayFields) || displayFields.length === 0) {
         return [];
@@ -516,7 +516,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             field: df.name || df.id || `col_${idx}`,
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
-            searchable: true,
+            searchable: false, // Mặc định Uncheck All theo yêu cầu User
             format: 'auto',
             sort: 'none',
             type: df.type || '',
@@ -539,7 +539,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
                 visible: ec.visible !== false,
-                searchable: ec.searchable !== false,
+                searchable: ec.searchable === true, // Chỉ bật khi người dùng đã tích chọn
                 sort: ec.sort || 'none',
                 format: ec.format || 'auto',
                 type: matchedDf.type || ec.type || '',
@@ -556,7 +556,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: df.name || df.id || `col_${idx}`,
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
-                searchable: true,
+                searchable: false, // Mặc định Uncheck All
                 format: 'auto',
                 sort: 'none',
                 type: df.type || '',
@@ -649,7 +649,7 @@ function openColumnConfigModal() {
                                                     <input type="checkbox" class="col-vis-chk" data-idx="${globalIdx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;" title="Bật/Tắt hiển thị cột">
                                                 </td>
                                                 <td style="text-align:center;">
-                                                    <input type="checkbox" class="col-search-chk" data-idx="${globalIdx}" ${col.searchable !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;" title="Tích để tìm kiếm trên cột này">
+                                                    <input type="checkbox" class="col-search-chk" data-idx="${globalIdx}" ${col.searchable === true ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;" title="Tích chọn để ô tìm kiếm quét trên cột này">
                                                 </td>
                                                 <td style="font-family:'JetBrains Mono',monospace; color:#000000; font-size:11.5px; font-weight:600;">${col.field}</td>
                                                 <td>
@@ -1006,16 +1006,16 @@ function renderTable() {
         // Lọc ra các cột được phép hiển thị (visible !== false)
         const activeColumns = (userColumnConfigs || []).filter(c => c && c.visible !== false);
 
-        // Xác định danh sách cột được tích chọn để tìm kiếm
-        const searchableCols = activeColumns.filter(c => c && c.searchable !== false);
-        const searchColIndices = (searchableCols.length > 0 ? searchableCols : activeColumns).map(c => c.rawIndex);
-        const searchColNames = (searchableCols.length > 0 ? searchableCols : activeColumns).map(c => c.title || c.field);
+        // Xác định danh sách cột được tích chọn để tìm kiếm (Mặc định uncheck all -> tìm trên tất cả cột active)
+        const explicitlySearchableCols = activeColumns.filter(c => c && c.searchable === true);
+        const searchColIndices = (explicitlySearchableCols.length > 0 ? explicitlySearchableCols : activeColumns).map(c => c.rawIndex);
+        const searchColNames = (explicitlySearchableCols.length > 0 ? explicitlySearchableCols : []).map(c => c.title || c.field);
 
         let autoPlaceholder = 'Tìm kiếm nhanh...';
         if (searchColNames.length > 0 && searchColNames.length <= 4) {
             autoPlaceholder = `Tìm theo: ${searchColNames.join(', ')}...`;
         } else if (searchColNames.length > 4) {
-            autoPlaceholder = `Tìm kiếm (${searchColNames.length} cột)...`;
+            autoPlaceholder = `Tìm theo ${searchColNames.length} cột đã chọn...`;
         }
 
         const finalPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value && styleConfig.searchPlaceholder.value.trim() !== '')
