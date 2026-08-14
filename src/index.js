@@ -1114,7 +1114,7 @@ function renderTable() {
                 const lastPageBtn = document.createElement('button');
                 lastPageBtn.className = 'page-btn';
                 lastPageBtn.textContent = totalPages;
-                lastPageBtn.addEventListener('click', () => { tableState.currentPage = totalPages; renderTable(); });
+                lastPageBtn.addEventListener('click', () => { runtimeState.currentPage = totalPages; renderTable(); });
                 paginationControls.appendChild(lastPageBtn);
             }
 

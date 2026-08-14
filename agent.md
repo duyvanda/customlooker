@@ -120,14 +120,13 @@ D:\customLooker/
 ├── downloader.html           # Helper tab tải file Excel .xlsx bảo toàn số 0 và copy JSON Date Range
 ├── index.css                 # Toàn bộ CSS giao diện bảng, sticky frozen columns, badges, variants, densities
 ├── index.json                # Schema Setup & Style chính thức của Looker Studio Community Viz
-├── manifest.json             # File Manifest khai báo tài nguyên Community Viz ("devMode": true)
+├── manifest.json             # File Manifest khai báo tài nguyên Community Viz ("devMode": false)
 ├── webpack.config.js         # Cấu hình đóng gói bundle JS tối ưu dung lượng
 ├── package.json              # Khai báo dependencies npm (@google/dscc, webpack)
 ├── index.bundle.js           # File bundle JS sản phẩm (~30.6 KB)
 ├── customLooker.zip          # Gói nén toàn bộ dự án
 ├── changelog/                # Thư mục nhật ký thay đổi và Walkthrough
-│   └── 20260814_204747_walkthrough.md # Nhật ký phiên làm việc
-├── EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md # Tài liệu chuyên sâu về Sandbox & Android WebView
+├── feedback.md               # Ghi chú phản hồi yêu cầu
 └── agent.md                  # Tài liệu toàn diện quy tắc & hướng dẫn (File này)
 ```
 
@@ -150,7 +149,7 @@ npm run build
 
 # 2. Xóa zip cũ và nén gói zip mới
 Remove-Item -Path "D:\customLooker\customLooker.zip" -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path "src", "downloader.html", "index.css", "index.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.js", "agent.md", "EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md", "changelog" -DestinationPath "D:\customLooker\customLooker.zip" -Force
+Compress-Archive -Path "src", "downloader.html", "index.css", "index.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.js", "agent.md", "feedback.md", "changelog" -DestinationPath "D:\customLooker\customLooker.zip" -Force
 ```
 
 ### 5.3. Lệnh Triển Khai Lên Google Cloud Storage (GCS)

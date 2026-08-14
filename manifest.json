@@ -18,7 +18,7 @@
             }
         }
     ],
-    "devMode": true,
+    "devMode": false,
     "privacyPolicyUrl": "https://google.com",
     "termsOfServiceUrl": "https://google.com"
 }
