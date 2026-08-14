@@ -2,7 +2,7 @@
     "data": [
         {
             "id": "dimensions",
-            "label": "Dimensions (Các cột hiển thị)",
+            "label": "Dimension",
             "type": "DIMENSION",
             "options": {
                 "min": 0,
@@ -11,7 +11,7 @@
         },
         {
             "id": "metrics",
-            "label": "Metrics (Các cột số liệu)",
+            "label": "Metric",
             "type": "METRIC",
             "options": {
                 "min": 0,
