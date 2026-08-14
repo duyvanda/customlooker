@@ -150,7 +150,7 @@ function isNumericValue(val, fieldType = '') {
     if (typeof val === 'boolean') return false;
 
     const ft = String(fieldType || '').toUpperCase();
-    if (ft && (ft.includes('DATE') || ft.includes('YEAR') || ft.includes('TIME') || ft.includes('MONTH') || ft.includes('DAY'))) {
+    if (ft && (ft.includes('DATE') || ft.includes('YEAR') || ft.includes('TIME') || ft.includes('MONTH') || ft.includes('DAY') || ft === 'TEXT' || ft === 'STRING')) {
         return false;
     }
 
@@ -343,7 +343,8 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
             if (Math.abs(num) < 1 && num !== 0) formattedVal = (num * 100).toFixed(1).replace(/\.0$/, '') + '%';
             else formattedVal = num.toFixed(1).replace(/\.0$/, '') + '%';
         } else {
-            formattedVal = num.toLocaleString('vi-VN');
+            // Tự động: Giữ tối đa 4 số thập phân nếu là số lẻ
+            formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
         }
     }
 
@@ -468,13 +469,14 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     existingConfigs.forEach(ec => {
         if (!ec) return;
         const matchedDf = displayFields.find(df => 
-            !usedRawIndices.has(df.rawIndex) && (df.name === ec.field || df.id === ec.id)
+            !usedRawIndices.has(df.rawIndex) && (df.name === ec.field || df.id === ec.id || df.name === ec.title)
         );
         if (matchedDf) {
             usedRawIndices.add(matchedDf.rawIndex);
             result.push({
                 ...ec,
-                title: ec.title || matchedDf.name,
+                field: matchedDf.name,
+                title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
                 type: matchedDf.type || ec.type || '',
                 rawIndex: matchedDf.rawIndex
             });
@@ -576,7 +578,7 @@ function openColumnConfigModal() {
                                             <td style="text-align:center;">
                                                 <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
                                             </td>
-                                            <td style="font-family:'JetBrains Mono',monospace; color:#334155; font-size:11.5px; font-weight:600;">${col.field}</td>
+                                            <td style="font-family:'JetBrains Mono',monospace; color:#000000; font-size:11.5px; font-weight:600;">${col.field}</td>
                                             <td>
                                                 <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
                                             </td>
