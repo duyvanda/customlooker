@@ -92,7 +92,6 @@ body {
 .btn-excel:hover {
     background: linear-gradient(180deg, #166534 0%, #14532d 100%);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    transform: translateY(-0.5px);
 }
 
 .btn-excel svg {
@@ -278,7 +277,7 @@ body {
 .preview-table td {
     border-bottom: 1px solid #e2e8f0;
     color: #0f172a;
-    font-weight: 450;
+    font-weight: 500;
     line-height: 1.45;
 }
 
@@ -499,38 +498,31 @@ body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* MODAL TÙY CHỈNH CỘT (TABLE COLUMN CONFIG MODAL) */
+/* MODAL TÙY CHỈNH CỘT (RAZOR SHARP - KHÔNG BACKDROP BLUR) */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(3px);
+    background: rgba(15, 23, 42, 0.6);
     z-index: 99999;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 16px;
-    animation: fadeIn 0.18s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }
 
 .modal-dialog {
     background: #ffffff;
-    border-radius: 10px;
+    border-radius: 8px;
     width: 90vw;
     max-width: 950px;
     max-height: 88vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
-    border: 1px solid #cbd5e1;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    border: 1px solid #94a3b8;
     overflow: hidden;
 }
 
@@ -553,7 +545,7 @@ body {
     border: 1px solid transparent;
     padding: 6px 14px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     color: #475569;
     border-radius: 6px;
     cursor: pointer;
@@ -562,15 +554,15 @@ body {
 }
 
 .modal-tab-btn:hover {
-    color: #0f172a;
+    color: #000000;
     background: #f1f5f9;
 }
 
 .modal-tab-btn.active {
     background: #ffffff;
     color: var(--primary);
-    border-color: #cbd5e1;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border-color: #94a3b8;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .modal-close-btn {
@@ -578,10 +570,11 @@ body {
     border: none;
     font-size: 18px;
     cursor: pointer;
-    color: #64748b;
+    color: #475569;
     padding: 4px;
     border-radius: 4px;
     line-height: 1;
+    font-weight: 700;
 }
 
 .modal-close-btn:hover {
@@ -593,6 +586,7 @@ body {
     padding: 16px 18px;
     overflow-y: auto;
     flex: 1;
+    background: #ffffff;
 }
 
 .modal-footer {
@@ -604,26 +598,28 @@ body {
     background: #f8fafc;
 }
 
-/* TABLES IN MODAL */
+/* TABLES IN MODAL - CRISP BLACK AND SHARP */
 .col-config-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 12.5px;
+    color: #000000;
 }
 
 .col-config-table th {
     text-align: left;
-    padding: 8px 10px;
+    padding: 9px 10px;
     background: #f1f5f9;
-    border-bottom: 2px solid #cbd5e1;
-    color: #0f172a;
+    border-bottom: 2px solid #94a3b8;
+    color: #000000;
     font-weight: 700;
 }
 
 .col-config-table td {
-    padding: 6px 10px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 7px 10px;
+    border-bottom: 1px solid #cbd5e1;
     vertical-align: middle;
+    color: #000000;
 }
 
 .col-config-table tr:hover {
@@ -632,37 +628,36 @@ body {
 
 .col-config-input, .col-config-select {
     width: 100%;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #94a3b8;
     background: #ffffff;
     border-radius: 5px;
-    padding: 5px 8px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #0f172a;
+    padding: 6px 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #000000;
     outline: none;
     font-family: inherit;
 }
 
 .col-config-input:focus, .col-config-select:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.15);
+    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.2);
 }
 
 .btn-move {
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #94a3b8;
     border-radius: 4px;
-    padding: 3px 6px;
+    padding: 4px 8px;
     font-size: 11px;
     cursor: pointer;
-    color: #334155;
-    font-weight: 600;
+    color: #000000;
+    font-weight: 700;
 }
 
 .btn-move:hover:not(:disabled) {
     background: #f1f5f9;
-    border-color: #94a3b8;
-    color: #000000;
+    border-color: #475569;
 }
 
 .btn-move:disabled {
@@ -674,14 +669,14 @@ body {
     background: var(--primary);
     color: #ffffff;
     border: none;
-    padding: 7px 18px;
+    padding: 8px 20px;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.15s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .btn-modal-save:hover {
@@ -690,12 +685,12 @@ body {
 
 .btn-modal-cancel {
     background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #334155;
-    padding: 7px 16px;
+    border: 1px solid #94a3b8;
+    color: #000000;
+    padding: 8px 18px;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.15s ease;
@@ -703,18 +698,17 @@ body {
 
 .btn-modal-cancel:hover {
     background: #f1f5f9;
-    border-color: #94a3b8;
-    color: #000000;
+    border-color: #475569;
 }
 
 .btn-modal-reset {
     background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-    padding: 7px 14px;
+    border: 1px solid #94a3b8;
+    color: #334155;
+    padding: 8px 16px;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.15s ease;
@@ -730,9 +724,9 @@ body {
     background: #f0fdf4;
     border: 1px dashed #15803d;
     color: #15803d;
-    font-weight: 600;
-    font-size: 12px;
-    padding: 8px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 9px 16px;
     border-radius: 6px;
     cursor: pointer;
     width: 100%;
@@ -753,7 +747,7 @@ body {
     background: none;
     border: none;
     color: var(--accent-red);
-    font-size: 14px;
+    font-size: 15px;
     cursor: pointer;
     padding: 4px 6px;
     border-radius: 4px;
