@@ -537,7 +537,7 @@ function loadStoredRules() {
     return [];
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM PHÂN TRANG 10 CỘT)
 function openColumnConfigModal() {
     try {
         if (!currentData) return;
@@ -548,6 +548,9 @@ function openColumnConfigModal() {
         }
 
         let activeTab = 'columns';
+        let modalColPage = 1;
+        const modalColPageSize = 10;
+
         let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || loadStoredColumnConfigs(displayFields)));
         let workingRules = JSON.parse(JSON.stringify(userConditionalRules || loadStoredRules()));
 
@@ -556,6 +559,14 @@ function openColumnConfigModal() {
         overlay.id = 'table-col-config-modal';
 
         function renderModalContent() {
+            const totalColPages = Math.max(1, Math.ceil(workingConfigs.length / modalColPageSize));
+            if (modalColPage > totalColPages) modalColPage = totalColPages;
+            if (modalColPage < 1) modalColPage = 1;
+
+            const startColIdx = (modalColPage - 1) * modalColPageSize;
+            const endColIdx = Math.min(startColIdx + modalColPageSize, workingConfigs.length);
+            const pagedConfigs = workingConfigs.slice(startColIdx, endColIdx);
+
             overlay.innerHTML = `
                 <div class="modal-dialog">
                     <div class="modal-header">
@@ -576,55 +587,71 @@ function openColumnConfigModal() {
                                 <thead>
                                     <tr>
                                         <th style="width:35px; text-align:center;">STT</th>
-                                        <th style="width:50px; text-align:center;">Hiện</th>
+                                        <th style="width:45px; text-align:center;">Hiện</th>
                                         <th style="width:170px;">Tên gốc Looker/BQ</th>
-                                        <th style="width:200px;">Tên hiển thị (Label)</th>
-                                        <th style="width:170px;">Định dạng (Format)</th>
-                                        <th style="width:150px;">Sắp xếp (Sort)</th>
-                                        <th style="width:75px; text-align:center;">Thứ tự</th>
+                                        <th style="width:190px;">Tên hiển thị (Label)</th>
+                                        <th style="width:160px;">Định dạng (Format)</th>
+                                        <th style="width:145px;">Sắp xếp (Sort)</th>
+                                        <th style="width:70px; text-align:center;">Thứ tự</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${workingConfigs.map((col, idx) => `
-                                        <tr>
-                                            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
-                                            <td style="text-align:center;">
-                                                <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
-                                            </td>
-                                            <td style="font-family:'JetBrains Mono',monospace; color:#000000; font-size:11.5px; font-weight:600;">${col.field}</td>
-                                            <td>
-                                                <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
-                                            </td>
-                                            <td>
-                                                <select class="col-config-select col-fmt-sel" data-idx="${idx}">
-                                                    <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
-                                                    <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
-                                                    <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
-                                                    <option value="date_mmyyyy" ${col.format === 'date_mmyyyy' ? 'selected' : ''}>Tháng/Năm (mm/yyyy)</option>
-                                                    <option value="date_yymmdd" ${col.format === 'date_yymmdd' ? 'selected' : ''}>Chuẩn Quốc Tế (yyyy-mm-dd)</option>
-                                                    <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
-                                                    <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
-                                                    <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
-                                                    <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
-                                                    <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
-                                                    <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select class="col-config-select col-sort-sel" data-idx="${idx}">
-                                                    <option value="none" ${(!col.sort || col.sort === 'none') ? 'selected' : ''}>-- Mặc định --</option>
-                                                    <option value="asc" ${col.sort === 'asc' ? 'selected' : ''}>Tăng dần (ASC ▲)</option>
-                                                    <option value="desc" ${col.sort === 'desc' ? 'selected' : ''}>Giảm dần (DESC ▼)</option>
-                                                </select>
-                                            </td>
-                                            <td style="text-align:center; white-space:nowrap;">
-                                                <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
-                                                <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
+                                    ${pagedConfigs.map((col, pIdx) => {
+                                        const globalIdx = startColIdx + pIdx;
+                                        return `
+                                            <tr>
+                                                <td style="text-align:center; color:#64748b; font-weight:700;">${globalIdx + 1}</td>
+                                                <td style="text-align:center;">
+                                                    <input type="checkbox" class="col-vis-chk" data-idx="${globalIdx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;">
+                                                </td>
+                                                <td style="font-family:'JetBrains Mono',monospace; color:#000000; font-size:11.5px; font-weight:600;">${col.field}</td>
+                                                <td>
+                                                    <input type="text" class="col-config-input col-title-inp" data-idx="${globalIdx}" value="${col.title || col.field}">
+                                                </td>
+                                                <td>
+                                                    <select class="col-config-select col-fmt-sel" data-idx="${globalIdx}">
+                                                        <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
+                                                        <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
+                                                        <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
+                                                        <option value="date_mmyyyy" ${col.format === 'date_mmyyyy' ? 'selected' : ''}>Tháng/Năm (mm/yyyy)</option>
+                                                        <option value="date_yymmdd" ${col.format === 'date_yymmdd' ? 'selected' : ''}>Chuẩn Quốc Tế (yyyy-mm-dd)</option>
+                                                        <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
+                                                        <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
+                                                        <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
+                                                        <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
+                                                        <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
+                                                        <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <select class="col-config-select col-sort-sel" data-idx="${globalIdx}">
+                                                        <option value="none" ${(!col.sort || col.sort === 'none') ? 'selected' : ''}>-- Mặc định --</option>
+                                                        <option value="asc" ${col.sort === 'asc' ? 'selected' : ''}>Tăng dần (ASC ▲)</option>
+                                                        <option value="desc" ${col.sort === 'desc' ? 'selected' : ''}>Giảm dần (DESC ▼)</option>
+                                                    </select>
+                                                </td>
+                                                <td style="text-align:center; white-space:nowrap;">
+                                                    <button class="btn-move btn-move-up" data-idx="${globalIdx}" ${globalIdx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
+                                                    <button class="btn-move btn-move-down" data-idx="${globalIdx}" ${globalIdx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
+                            
+                            ${totalColPages > 1 ? `
+                                <div class="modal-pagination">
+                                    <span>Hiển thị cột ${startColIdx + 1}–${endColIdx} trên tổng số ${workingConfigs.length} cột</span>
+                                    <div class="modal-page-controls">
+                                        <button class="modal-page-btn" id="modal-prev-page" ${modalColPage === 1 ? 'disabled' : ''}>‹ Trước</button>
+                                        ${Array.from({ length: totalColPages }, (_, i) => i + 1).map(p => `
+                                            <button class="modal-page-btn ${p === modalColPage ? 'active' : ''}" data-page="${p}">${p}</button>
+                                        `).join('')}
+                                        <button class="modal-page-btn" id="modal-next-page" ${modalColPage === totalColPages ? 'disabled' : ''}>Sau ›</button>
+                                    </div>
+                                </div>
+                            ` : ''}
                         ` : `
                             <div>
                                 <div style="font-size:12px; color:#475569; margin-bottom:10px; font-weight:500;">
@@ -707,22 +734,23 @@ function openColumnConfigModal() {
                 </div>
             `;
 
-            overlay.querySelector('#tab-btn-columns').onclick = () => { activeTab = 'columns'; renderModalContent(); };
-            overlay.querySelector('#tab-btn-rules').onclick = () => { activeTab = 'rules'; renderModalContent(); };
+            overlay.querySelector('#tab-btn-columns').onclick = () => { syncInputsBeforeMove(); activeTab = 'columns'; renderModalContent(); };
+            overlay.querySelector('#tab-btn-rules').onclick = () => { syncInputsBeforeMove(); activeTab = 'rules'; renderModalContent(); };
             overlay.querySelector('#btn-close-modal').onclick = () => overlay.remove();
             overlay.querySelector('#btn-cancel-modal').onclick = () => overlay.remove();
 
             function syncInputsBeforeMove() {
                 if (activeTab === 'columns') {
-                    for (let idx = 0; idx < workingConfigs.length; idx++) {
-                        const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
-                        const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
-                        const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
-                        const sortSel = overlay.querySelector(`.col-sort-sel[data-idx="${idx}"]`);
-                        if (chk) workingConfigs[idx].visible = chk.checked;
-                        if (titleInp) workingConfigs[idx].title = titleInp.value;
-                        if (fmtSel) workingConfigs[idx].format = fmtSel.value;
-                        if (sortSel) workingConfigs[idx].sort = sortSel.value;
+                    for (let pIdx = 0; pIdx < pagedConfigs.length; pIdx++) {
+                        const globalIdx = startColIdx + pIdx;
+                        const chk = overlay.querySelector(`.col-vis-chk[data-idx="${globalIdx}"]`);
+                        const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${globalIdx}"]`);
+                        const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${globalIdx}"]`);
+                        const sortSel = overlay.querySelector(`.col-sort-sel[data-idx="${globalIdx}"]`);
+                        if (chk) workingConfigs[globalIdx].visible = chk.checked;
+                        if (titleInp) workingConfigs[globalIdx].title = titleInp.value;
+                        if (fmtSel) workingConfigs[globalIdx].format = fmtSel.value;
+                        if (sortSel) workingConfigs[globalIdx].sort = sortSel.value;
                     }
                 } else if (activeTab === 'rules') {
                     for (let idx = 0; idx < workingRules.length; idx++) {
@@ -739,6 +767,38 @@ function openColumnConfigModal() {
             }
 
             if (activeTab === 'columns') {
+                // Sự kiện phân trang trong Modal
+                const prevPageBtn = overlay.querySelector('#modal-prev-page');
+                if (prevPageBtn) {
+                    prevPageBtn.onclick = () => {
+                        syncInputsBeforeMove();
+                        if (modalColPage > 1) {
+                            modalColPage--;
+                            renderModalContent();
+                        }
+                    };
+                }
+
+                const nextPageBtn = overlay.querySelector('#modal-next-page');
+                if (nextPageBtn) {
+                    nextPageBtn.onclick = () => {
+                        syncInputsBeforeMove();
+                        if (modalColPage < totalColPages) {
+                            modalColPage++;
+                            renderModalContent();
+                        }
+                    };
+                }
+
+                overlay.querySelectorAll('.modal-page-btn[data-page]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        syncInputsBeforeMove();
+                        modalColPage = Number(e.target.dataset.page);
+                        renderModalContent();
+                    };
+                });
+
+                // Di chuyển cột lên/xuống
                 overlay.querySelectorAll('.btn-move-up').forEach(btn => {
                     btn.onclick = (e) => {
                         syncInputsBeforeMove();

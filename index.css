@@ -498,7 +498,7 @@ body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* MODAL TÙY CHỈNH CỘT (RAZOR SHARP - KHÔNG BACKDROP BLUR) */
+/* MODAL TÙY CHỈNH CỘT (KÉO LÊN TRÊN CÙNG & RAZOR SHARP) */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -508,17 +508,19 @@ body {
     background: rgba(15, 23, 42, 0.6);
     z-index: 99999;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 16px;
+    padding: 10px;
+    overflow-y: auto;
 }
 
 .modal-dialog {
     background: #ffffff;
     border-radius: 8px;
-    width: 90vw;
-    max-width: 950px;
-    max-height: 88vh;
+    width: 94vw;
+    max-width: 1050px;
+    max-height: 96vh;
+    margin-top: 4px;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
@@ -527,12 +529,13 @@ body {
 }
 
 .modal-header {
-    padding: 12px 18px;
+    padding: 10px 16px;
     border-bottom: 1px solid #cbd5e1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     background: #f8fafc;
+    flex-shrink: 0;
 }
 
 .modal-nav-tabs {
@@ -543,7 +546,7 @@ body {
 .modal-tab-btn {
     background: transparent;
     border: 1px solid transparent;
-    padding: 6px 14px;
+    padding: 5px 12px;
     font-size: 13px;
     font-weight: 700;
     color: #475569;
@@ -583,32 +586,33 @@ body {
 }
 
 .modal-body {
-    padding: 16px 18px;
+    padding: 12px 16px;
     overflow-y: auto;
     flex: 1;
     background: #ffffff;
 }
 
 .modal-footer {
-    padding: 12px 18px;
+    padding: 10px 16px;
     border-top: 1px solid #cbd5e1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     background: #f8fafc;
+    flex-shrink: 0;
 }
 
 /* TABLES IN MODAL - CRISP BLACK AND SHARP */
 .col-config-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: 12px;
     color: #000000;
 }
 
 .col-config-table th {
     text-align: left;
-    padding: 9px 10px;
+    padding: 7px 8px;
     background: #f1f5f9;
     border-bottom: 2px solid #94a3b8;
     color: #000000;
@@ -616,7 +620,7 @@ body {
 }
 
 .col-config-table td {
-    padding: 7px 10px;
+    padding: 5px 8px;
     border-bottom: 1px solid #cbd5e1;
     vertical-align: middle;
     color: #000000;
@@ -631,8 +635,8 @@ body {
     border: 1px solid #94a3b8;
     background: #ffffff;
     border-radius: 5px;
-    padding: 6px 8px;
-    font-size: 12.5px;
+    padding: 5px 7px;
+    font-size: 12px;
     font-weight: 600;
     color: #000000;
     outline: none;
@@ -648,8 +652,8 @@ body {
     background: #ffffff;
     border: 1px solid #94a3b8;
     border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 11px;
+    padding: 3px 6px;
+    font-size: 10.5px;
     cursor: pointer;
     color: #000000;
     font-weight: 700;
@@ -669,9 +673,9 @@ body {
     background: var(--primary);
     color: #ffffff;
     border: none;
-    padding: 8px 20px;
+    padding: 7px 18px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
     font-family: inherit;
@@ -687,9 +691,9 @@ body {
     background: #ffffff;
     border: 1px solid #94a3b8;
     color: #000000;
-    padding: 8px 18px;
+    padding: 7px 16px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
     font-family: inherit;
@@ -705,9 +709,9 @@ body {
     background: #ffffff;
     border: 1px solid #94a3b8;
     color: #334155;
-    padding: 8px 16px;
+    padding: 7px 14px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
     font-family: inherit;
@@ -725,12 +729,12 @@ body {
     border: 1px dashed #15803d;
     color: #15803d;
     font-weight: 700;
-    font-size: 13px;
-    padding: 9px 16px;
+    font-size: 12px;
+    padding: 8px 14px;
     border-radius: 6px;
     cursor: pointer;
     width: 100%;
-    margin-top: 12px;
+    margin-top: 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -747,12 +751,59 @@ body {
     background: none;
     border: none;
     color: var(--accent-red);
-    font-size: 15px;
+    font-size: 14px;
     cursor: pointer;
-    padding: 4px 6px;
+    padding: 3px 5px;
     border-radius: 4px;
 }
 
 .btn-del-rule:hover {
     background: #fee2e2;
+}
+
+/* MODAL PAGINATION */
+.modal-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 12px;
+    color: #475569;
+    font-weight: 600;
+}
+
+.modal-page-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.modal-page-btn {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.modal-page-btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.modal-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.modal-page-btn.active {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
 }
