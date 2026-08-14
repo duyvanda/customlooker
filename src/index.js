@@ -20,6 +20,16 @@ let tableState = {
     searchQuery: ''
 };
 
+// HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT (TƯƠNG THÍCH ĐỒNG NHẤT VỚI src/utils/string.js)
+function remove_accents(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .toLowerCase()
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd');
+}
+
 // HÀM HIỂN THỊ SKELETON LOADING
 function showSkeleton() {
     try {
@@ -99,23 +109,19 @@ function isDateValue(val, fieldType = '') {
     const str = String(val).trim();
     if (str === '') return false;
 
-    // 1. Kiểm tra Schema Type từ Looker Studio DSCC
     const ft = String(fieldType || '').toUpperCase();
     if (ft.includes('DATE') || ft.includes('YEAR_MONTH_DAY') || ft.includes('DATETIME') || ft.includes('TIME')) {
         return true;
     }
 
-    // 2. Chuỗi YYYYMMDD (8 chữ số ngày tháng từ 1900 đến 2099)
     if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(str)) {
         return true;
     }
 
-    // 3. Chuỗi YYYYMMDDHHMMSS (14 chữ số ngày giờ)
     if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/.test(str)) {
         return true;
     }
 
-    // 4. Chuỗi có phân cách: YYYY-MM-DD hoặc DD-MM-YYYY hoặc DD/MM/YYYY
     if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str) || /^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(str)) {
         return true;
     }
@@ -123,12 +129,11 @@ function isDateValue(val, fieldType = '') {
     return false;
 }
 
-// HÀM KIỂM TRA CHÍNH XÁC SỐ THỰC SỰ (Loại trừ triệt để định dạng ngày YYYYMMDD)
+// HÀM KIỂM TRA CHÍNH XÁC SỐ THỰC SỰ
 function isNumericValue(val, fieldType = '') {
     if (val === null || val === undefined) return false;
     if (typeof val === 'boolean') return false;
 
-    // Nếu Looker Studio khai báo là kiểu Date thì không phải số
     const ft = String(fieldType || '').toUpperCase();
     if (ft.includes('DATE') || ft.includes('YEAR_MONTH_DAY') || ft.includes('DATETIME') || ft.includes('TIME')) {
         return false;
@@ -137,7 +142,6 @@ function isNumericValue(val, fieldType = '') {
     const s = String(val).trim();
     if (s === '') return false;
 
-    // Nếu là chuỗi YYYYMMDD 8 chữ số ngày tháng thì KHÔNG coi là số thông thường!
     if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s)) {
         return false;
     }
@@ -178,7 +182,7 @@ function formatDateValue(val, fmtStyle = 'date') {
     if (val === null || val === undefined || val === '') return '';
     const str = String(val).trim();
 
-    // 1. Chuỗi YYYYMMDD 8 chữ số (Looker Studio mặc định gửi sang)
+    // 1. Chuỗi YYYYMMDD 8 chữ số Looker Studio
     const match8 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/);
     if (match8) {
         const yyyy = match8[1];
@@ -234,32 +238,32 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM ĐÁNH GIÁ VÀ ÁP DỤNG QUY TẮC ĐIỀU KIỆN ĐỘNG
+// HÀM ĐÁNH GIÁ VÀ ÁP DỤNG QUY TẮC ĐIỀU KIỆN ĐỘNG (DÙNG REMOVE_ACCENTS ĐỂ MATCH CHUẨN XÁC)
 function evaluateAllRules(fieldName, val, allRules) {
     if (!allRules || !Array.isArray(allRules) || allRules.length === 0) return null;
     if (val === null || val === undefined) return null;
 
     const str = String(val).trim();
-    const strLower = str.toLowerCase();
+    const strNormalized = remove_accents(str);
     const isNum = isNumericValue(val);
     const num = isNum ? Number(val) : NaN;
 
     for (const rule of allRules) {
-        if (rule.field !== '*' && rule.field.toLowerCase() !== fieldName.toLowerCase()) {
+        if (rule.field !== '*' && remove_accents(rule.field) !== remove_accents(fieldName)) {
             continue;
         }
 
         let matched = false;
         const targetVal = (rule.value || '').trim();
-        const targetLower = targetVal.toLowerCase();
+        const targetNormalized = remove_accents(targetVal);
         const targetNum = Number(targetVal);
 
         if (rule.operator === 'contains') {
-            matched = targetLower !== '' && strLower.includes(targetLower);
+            matched = targetNormalized !== '' && strNormalized.includes(targetNormalized);
         } else if (rule.operator === 'equals') {
-            matched = strLower === targetLower;
+            matched = strNormalized === targetNormalized;
         } else if (rule.operator === 'startsWith') {
-            matched = strLower.startsWith(targetLower);
+            matched = strNormalized.startsWith(targetNormalized);
         } else if (rule.operator === 'pos') {
             matched = isNum && num >= 0;
         } else if (rule.operator === 'neg') {
@@ -299,7 +303,6 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
     } else if (colFmt === 'badge') {
         formattedVal = `<span class="badge badge-default">${str}</span>`;
     } else if (isDate) {
-        // Tự động định dạng ngày tháng sang dd-mm-yyyy chuẩn Việt Nam
         formattedVal = formatDateValue(str, colFmt === 'auto' ? 'date' : colFmt);
     } else if (isNum) {
         if (colFmt === 'number_comma') {
@@ -320,9 +323,11 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         } else {
             formattedVal = num.toLocaleString('vi-VN');
         }
+    } else if (isValidDate(str)) {
+        formattedVal = formatDateValue(str, 'date');
     }
 
-    // 2. KIỂM TRA QUY TẮC ĐIỀU KIỆN ĐỘNG (> < = contain startsWith pos neg)
+    // 2. KIỂM TRA QUY TẮC ĐIỀU KIỆN ĐỘNG
     const ruleStyle = evaluateAllRules(fieldName, val, allRules);
     if (ruleStyle) {
         if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
@@ -361,14 +366,12 @@ function compareValues(a, b, fieldType = '') {
     if (a === null || a === undefined || a === '') return 1;
     if (b === null || b === undefined || b === '') return -1;
 
-    // So sánh ngày tháng
     if (isDateValue(a, fieldType) && isDateValue(b, fieldType)) {
         const strA = String(a).trim();
         const strB = String(b).trim();
         return strA.localeCompare(strB);
     }
 
-    // So sánh số
     if (isNumericValue(a, fieldType) && isNumericValue(b, fieldType)) {
         return Number(a) - Number(b);
     }
@@ -869,10 +872,10 @@ function renderTable() {
         ? styleConfig.searchPlaceholder.value
         : autoPlaceholder;
 
-    // 1. FILTER TÌM KIẾM
+    // 1. FILTER TÌM KIẾM BỎ DẤU TIẾNG VIỆT CHUẨN XÁC (remove_accents)
     let filteredRows = rawRows;
     if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
-        const words = tableState.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const words = remove_accents(tableState.searchQuery.trim()).split(/\s+/).filter(Boolean);
         const searchCols = designatedSearchIndices.length > 0
             ? designatedSearchIndices
             : activeColumns.map(c => c.rawIndex);
@@ -881,7 +884,8 @@ function renderTable() {
             return words.every(word => {
                 return searchCols.some(colIdx => {
                     const cellVal = row[colIdx];
-                    return String(cellVal || '').toLowerCase().includes(word);
+                    const cleanCell = remove_accents(cellVal);
+                    return cleanCell.includes(word);
                 });
             });
         });
