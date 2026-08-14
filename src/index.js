@@ -652,108 +652,7 @@ function applyFrozenColumnOffsets(table, showSTT) {
     }
 }
 
-// HÀM COPY GIÁ TRỊ CỦA MỘT CỘT (TOÀN BỘ HOẶC UNIQUE) VÀO CLIPBOARD
-function copyColumnValues(col, rows, isUnique = false, delimiter = '\n') {
-    if (!rows || rows.length === 0 || !col) {
-        showToast('Không có dữ liệu để copy!');
-        return;
-    }
 
-    const values = [];
-    rows.forEach(r => {
-        if (!r) return;
-        const val = r[col.rawIndex];
-        if (val !== null && val !== undefined) {
-            const sVal = String(val).trim();
-            if (sVal !== '') {
-                values.push(sVal);
-            }
-        }
-    });
-
-    const finalValues = isUnique ? Array.from(new Set(values)) : values;
-    const textToCopy = finalValues.join(delimiter);
-
-    copyTextToClipboard(textToCopy, `✓ Đã copy ${finalValues.length} giá trị cột '${col.name}' (${isUnique ? 'Unique' : 'Tất cả'})!`);
-}
-
-// HÀM MỞ POPUP COPY DỮ LIỆU BỘ LỌC / CỘT TIỆN LỢI
-function openCopyFilterDataPopup(tableColumns, activeRows) {
-    try {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.id = 'copy-data-modal';
-
-        overlay.innerHTML = `
-            <div class="modal-dialog" style="max-width: 520px;">
-                <div class="modal-header">
-                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">📋 Copy Dữ Liệu Bộ Lọc / Cột Dữ Liệu</span>
-                    <button class="modal-close-btn" id="btn-close-copy-modal">✕</button>
-                </div>
-                <div class="modal-body" style="max-height: 62vh; overflow-y: auto;">
-                    <div style="font-size: 12px; color: #475569; margin-bottom: 12px; line-height: 1.45;">
-                        💡 Bấm <strong>Copy</strong> để sao chép danh sách giá trị của cột đó (mỗi giá trị một dòng, chuẩn để dán vào bộ lọc Looker Studio hoặc Excel).
-                    </div>
-                    <table class="col-config-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 40px; text-align: center;">STT</th>
-                                <th>Tên Cột (Dimension / Metric)</th>
-                                <th style="width: 170px; text-align: right;">Thao Tác Copy</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${tableColumns.map((col, idx) => {
-                                return `
-                                    <tr>
-                                        <td style="text-align: center; color: #64748b; font-weight: 700;">${idx + 1}</td>
-                                        <td style="font-weight: 600; color: #0f172a;">${col.name}</td>
-                                        <td style="text-align: right; white-space: nowrap;">
-                                            <button class="btn-copy-unique" data-raw-idx="${col.rawIndex}" data-col-name="${col.name}" style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer; margin-right: 4px;">
-                                                📋 Unique
-                                            </button>
-                                            <button class="btn-copy-all" data-raw-idx="${col.rawIndex}" data-col-name="${col.name}" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
-                                                📋 Tất cả
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="modal-footer" style="justify-content: flex-end;">
-                    <button class="btn-modal-reset" id="btn-done-copy-modal">Đóng</button>
-                </div>
-            </div>
-        `;
-
-        overlay.querySelector('#btn-close-copy-modal').onclick = () => overlay.remove();
-        overlay.querySelector('#btn-done-copy-modal').onclick = () => overlay.remove();
-
-        // Xử lý nút Copy Unique
-        overlay.querySelectorAll('.btn-copy-unique').forEach(btn => {
-            btn.onclick = () => {
-                const rawIdx = parseInt(btn.dataset.rawIdx, 10);
-                const colName = btn.dataset.colName;
-                copyColumnValues({ rawIndex: rawIdx, name: colName }, activeRows, true);
-            };
-        });
-
-        // Xử lý nút Copy All
-        overlay.querySelectorAll('.btn-copy-all').forEach(btn => {
-            btn.onclick = () => {
-                const rawIdx = parseInt(btn.dataset.rawIdx, 10);
-                const colName = btn.dataset.colName;
-                copyColumnValues({ rawIndex: rawIdx, name: colName }, activeRows, false);
-            };
-        });
-
-        document.body.appendChild(overlay);
-    } catch (err) {
-        console.error('[ExcelViz] openCopyFilterDataPopup error:', err);
-    }
-}
 
 // HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (TỰ KHÔI PHỤC KHI F5)
 function openRuntimeColumnsPopup(tableColumns) {
@@ -991,14 +890,6 @@ function renderTable() {
         `;
         toolbarLeft.appendChild(btnExcel);
 
-        // Nút Copy Dữ Liệu Bộ Lọc / Cột
-        const btnCopyData = document.createElement('button');
-        btnCopyData.className = 'btn-copy-data';
-        btnCopyData.innerHTML = `<span>📋 Copy cột dữ liệu</span>`;
-        btnCopyData.title = 'Copy danh sách giá trị của một cột để dán vào bộ lọc hoặc Excel';
-        btnCopyData.onclick = () => openCopyFilterDataPopup(tableColumns, sortedRows.length > 0 ? sortedRows : rawRows);
-        toolbarLeft.appendChild(btnCopyData);
-
         // Nút Popup Ẩn/Hiện Cột
         if (showColPopup) {
             const btnColPopup = document.createElement('button');
@@ -1116,19 +1007,8 @@ function renderTable() {
                 <div class="th-content">
                     <span>${col.name}</span>
                     <span class="sort-icon">${icon}</span>
-                    <button class="btn-th-copy" title="Copy toàn bộ giá trị cột '${col.name}'">📋</button>
                 </div>
             `;
-
-            // Nút copy trên từng tiêu đề cột (1 click là copy luôn cột đó)
-            const thCopyBtn = th.querySelector('.btn-th-copy');
-            if (thCopyBtn) {
-                thCopyBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const activeDataset = sortedRows.length > 0 ? sortedRows : rawRows;
-                    copyColumnValues(col, activeDataset, true);
-                });
-            }
 
             if (allowHeaderSort) {
                 // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Setup Multi-Level Sort!
