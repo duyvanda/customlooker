@@ -32,15 +32,6 @@
                     }
                 },
                 {
-                    "id": "freezeMetrics",
-                    "label": "📌 Cố định Metric (Freeze Columns)",
-                    "type": "METRIC",
-                    "options": {
-                        "min": 0,
-                        "max": 10
-                    }
-                },
-                {
                     "id": "searchFields",
                     "label": "🔍 Cột quét tìm kiếm (Search Columns)",
                     "type": "DIMENSION",

@@ -623,10 +623,9 @@ function renderTable() {
         const setupSortLevels = extractSetupSortConfig(currentData, styleConfig);
         const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig);
 
-        // Trích xuất danh sách field cần Cố định cột (Freeze Columns) từ Setup
+        // Trích xuất danh sách Dimension cần Cố định cột (Freeze Columns) từ Setup
         const freezeDims = Array.isArray(fields.freezeDimensions) ? fields.freezeDimensions : [];
-        const freezeMets = Array.isArray(fields.freezeMetrics) ? fields.freezeMetrics : [];
-        const freezeFieldIds = new Set([...freezeDims, ...freezeMets].map(f => f.id));
+        const freezeFieldIds = new Set(freezeDims.map(f => f.id));
 
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
