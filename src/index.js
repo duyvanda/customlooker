@@ -1,13 +1,15 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình cột trên localStorage
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v3';
+// Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage
+const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v4';
+const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v4';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
 let currentData = null;
 let userColumnConfigs = null; // Cấu hình cột tùy biến
+let userConditionalRules = null; // Quy tắc tô màu động từ Modal
 
 let tableState = {
     sortColumn: null,       // index trong columns đang sort (0-based)
@@ -167,60 +169,126 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM BÓC TÁCH CÁC QUY TẮC MÀU & BADGES TỪ STYLE PANEL (ADMIN SETUP)
-function getStyleRules(styleConfig) {
-    const parseKeywords = (val, defaultVal = '') => {
-        const raw = (val !== undefined && val !== null && String(val).trim() !== '') ? String(val) : defaultVal;
-        return raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    };
+// HÀM PARSER QUY TẮC ĐỘNG TỪ STYLE PANEL (ADMIN DSL: Cột = Giá trị : Kiểu, hoặc > 1000 : green)
+function parseDslRules(text) {
+    if (!text || typeof text !== 'string' || text.trim() === '') return [];
+    const lines = text.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
+    const rules = [];
 
-    return {
-        greenWords: parseKeywords(styleConfig.badgeGreenWords?.value, 'done, active, thành công, hoàn tất, đạt, true, 1'),
-        redWords: parseKeywords(styleConfig.badgeRedWords?.value, 'off, fail, failed, cancel, hủy, thất bại, late, false, 0'),
-        yellowWords: parseKeywords(styleConfig.badgeYellowWords?.value, 'pending, chờ xử lý, đang xử lý, warning'),
-        blueWords: parseKeywords(styleConfig.badgeBlueWords?.value, 'ch-replace, staging, info'),
-        fallbackStyle: styleConfig.badgeFallbackStyle?.value || 'badge_gray',
-        highlightPosNeg: styleConfig.highlightPosNeg?.value === true
-    };
+    lines.forEach(line => {
+        const parts = line.split(':');
+        if (parts.length < 2) return;
+
+        const left = parts[0].trim();
+        const rawStyle = parts.slice(1).join(':').trim().toLowerCase();
+
+        let style = 'badge_info';
+        if (rawStyle.includes('red') || rawStyle.includes('danger') || rawStyle.includes('đỏ')) {
+            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_danger' : 'color_red';
+        } else if (rawStyle.includes('green') || rawStyle.includes('success') || rawStyle.includes('xanh lá')) {
+            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_success' : 'color_green';
+        } else if (rawStyle.includes('yellow') || rawStyle.includes('warn') || rawStyle.includes('amber') || rawStyle.includes('vàng')) {
+            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_warning' : 'color_amber';
+        } else if (rawStyle.includes('blue') || rawStyle.includes('cyan') || rawStyle.includes('info') || rawStyle.includes('dương')) {
+            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_info' : 'color_cyan';
+        } else if (rawStyle.includes('gray') || rawStyle.includes('xám')) {
+            style = 'badge_gray';
+        } else if (rawStyle.includes('pos_neg')) {
+            style = 'color_pos_neg';
+        }
+
+        // Case 1: [Field] [>= | <= | > | < | = | == | contain | contains | startswith] [Value]
+        const matchFull = left.match(/^([a-zA-Z0-9_\s\u00C0-\u024F\u1EA0-\u1EF9]+?)\s*(>=|<=|>|<|==|=|contain|contains|startswith|startsWith)\s*(.*)$/i);
+        if (matchFull) {
+            const field = matchFull[1].trim();
+            let op = matchFull[2].toLowerCase();
+            const val = matchFull[3].trim();
+            if (op === '=' || op === '==') op = 'equals';
+            if (op === 'contain') op = 'contains';
+            if (op === 'startswith') op = 'startsWith';
+
+            rules.push({ field, operator: op, value: val, style });
+            return;
+        }
+
+        // Case 2: [>= | <= | > | <] [Value] (áp dụng cho mọi cột số)
+        const matchOpOnly = left.match(/^(>=|<=|>|<)\s*(.*)$/);
+        if (matchOpOnly) {
+            rules.push({ field: '*', operator: matchOpOnly[1], value: matchOpOnly[2].trim(), style });
+            return;
+        }
+
+        // Case 3: [Value] (mặc định equals hoặc contains cho mọi cột)
+        rules.push({ field: '*', operator: 'equals', value: left, style });
+    });
+
+    return rules;
 }
 
-// HÀM FORMAT CELL VỚI CÁC QUY TẮC TỪ SETUP & STYLE PANEL
-function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', isBadgeColumn = false, styleRules = {}) {
+// HÀM ĐÁNH GIÁ VÀ ÁP DỤNG QUY TẮC ĐIỀU KIỆN ĐỘNG
+function evaluateAllRules(fieldName, val, allRules) {
+    if (!allRules || !Array.isArray(allRules) || allRules.length === 0) return null;
+    if (val === null || val === undefined) return null;
+
+    const str = String(val).trim();
+    const strLower = str.toLowerCase();
+    const isNum = isNumericValue(val);
+    const num = isNum ? Number(val) : NaN;
+
+    for (const rule of allRules) {
+        // Kiểm tra đúng cột áp dụng hoặc tất cả cột (*)
+        if (rule.field !== '*' && rule.field.toLowerCase() !== fieldName.toLowerCase()) {
+            continue;
+        }
+
+        let matched = false;
+        const targetVal = (rule.value || '').trim();
+        const targetLower = targetVal.toLowerCase();
+        const targetNum = Number(targetVal);
+
+        if (rule.operator === 'contains') {
+            matched = strLower.includes(targetLower);
+        } else if (rule.operator === 'equals') {
+            matched = strLower === targetLower;
+        } else if (rule.operator === 'startsWith') {
+            matched = strLower.startsWith(targetLower);
+        } else if (rule.operator === 'pos') {
+            matched = isNum && num >= 0;
+        } else if (rule.operator === 'neg') {
+            matched = isNum && num < 0;
+        } else if (isNum && !isNaN(targetNum)) {
+            if (rule.operator === '>') matched = num > targetNum;
+            else if (rule.operator === '<') matched = num < targetNum;
+            else if (rule.operator === '>=') matched = num >= targetNum;
+            else if (rule.operator === '<=') matched = num <= targetNum;
+            else if (rule.operator === '==' || rule.operator === 'equals') matched = num === targetNum;
+        }
+
+        if (matched) {
+            return rule.style;
+        }
+    }
+
+    return null;
+}
+
+// HÀM FORMAT CELL TOÀN DIỆN
+function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', allRules = [], highlightPosNeg = false) {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
 
     const str = String(val).trim();
-    const lowerVal = str.toLowerCase();
     const isNum = isNumericValue(val);
     const num = isNum ? Number(val) : NaN;
 
-    // 1. NẾU CỘT ĐƯỢC CHỌN LÀ CỘT BADGE (Kéo vào badgeFields ở Setup hoặc chọn Badge trong Modal)
-    if (isBadgeColumn || colFmt === 'badge') {
-        if (styleRules.greenWords && styleRules.greenWords.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
-            return `<span class="badge badge-success">✓ ${str}</span>`;
-        }
-        if (styleRules.redWords && styleRules.redWords.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
-            return `<span class="badge badge-danger">✕ ${str}</span>`;
-        }
-        if (styleRules.yellowWords && styleRules.yellowWords.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
-            return `<span class="badge badge-warning">⏳ ${str}</span>`;
-        }
-        if (styleRules.blueWords && styleRules.blueWords.some(kw => lowerVal === kw || (kw.length > 3 && lowerVal.includes(kw)))) {
-            return `<span class="badge badge-info">${str}</span>`;
-        }
-        
-        if (styleRules.fallbackStyle === 'plain_text' && !isBadgeColumn) {
-            return str;
-        }
-        return `<span class="badge badge-default">${str}</span>`;
-    }
-
-    // 2. FORMAT GIÁ TRỊ CƠ BẢN (KHÔNG PHẢI CỘT BADGE)
+    // 1. FORMAT GIÁ TRỊ CƠ BẢN
     let formattedVal = str;
 
     if (colFmt === 'monospace') {
         formattedVal = `<span class="font-mono">${str}</span>`;
+    } else if (colFmt === 'badge') {
+        formattedVal = `<span class="badge badge-default">${str}</span>`;
     } else if (colFmt.startsWith('date')) {
         formattedVal = formatDateValue(str, colFmt);
     } else if (isNum) {
@@ -246,8 +314,27 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         formattedVal = formatDateValue(str, 'date');
     }
 
+    // 2. KIỂM TRA QUY TẮC ĐIỀU KIỆN ĐỘNG (> < = contain startsWith pos neg)
+    const ruleStyle = evaluateAllRules(fieldName, val, allRules);
+    if (ruleStyle) {
+        if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
+        if (ruleStyle === 'badge_danger') return `<span class="badge badge-danger">✕ ${str}</span>`;
+        if (ruleStyle === 'badge_warning') return `<span class="badge badge-warning">⏳ ${str}</span>`;
+        if (ruleStyle === 'badge_info') return `<span class="badge badge-info">${str}</span>`;
+        if (ruleStyle === 'badge_gray') return `<span class="badge badge-default">${str}</span>`;
+        if (ruleStyle === 'color_green') return `<span class="color-green">${formattedVal}</span>`;
+        if (ruleStyle === 'color_red') return `<span class="color-red">${formattedVal}</span>`;
+        if (ruleStyle === 'color_amber') return `<span class="color-amber">${formattedVal}</span>`;
+        if (ruleStyle === 'color_cyan') return `<span class="color-cyan">${formattedVal}</span>`;
+        if (ruleStyle === 'color_pos_neg') {
+            return (isNum && num < 0)
+                ? `<span class="color-pos-neg-neg">${formattedVal}</span>`
+                : `<span class="color-pos-neg-pos">${formattedVal}</span>`;
+        }
+    }
+
     // 3. TÔ MÀU SỐ DƯƠNG / SỐ ÂM TỰ ĐỘNG
-    if (styleRules.highlightPosNeg && isNum) {
+    if (highlightPosNeg && isNum) {
         return num >= 0
             ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
             : `<span class="color-pos-neg-neg">${formattedVal}</span>`;
@@ -284,16 +371,14 @@ function compareValues(a, b) {
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(String(a), String(b));
 }
 
-// HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ (GỒM DIMENSIONS, METRICS & BADGEFIELDS, LOẠI TRỪ SEARCHFIELDS)
+// HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ (GỒM DIMENSIONS, METRICS, LOẠI TRỪ SEARCHFIELDS)
 function extractDisplayFields(currentData) {
     const fields = currentData.fields || {};
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const displayFields = [];
 
     const searchFieldIds = (fields.searchFields || []).map(sf => sf.id || sf.name);
-    const badgeFieldIds = (fields.badgeFields || []).map(bf => bf.id || bf.name);
 
-    // 1. Dimensions
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
         fields.dimensions.forEach(f => {
             const rawIdx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
@@ -301,34 +386,12 @@ function extractDisplayFields(currentData) {
                 displayFields.push({
                     id: f.id || `dim_${rawIdx}`,
                     name: f.name || f.id,
-                    rawIndex: rawIdx,
-                    isBadgeColumn: badgeFieldIds.includes(f.id) || badgeFieldIds.includes(f.name)
+                    rawIndex: rawIdx
                 });
             }
         });
     }
 
-    // 2. BadgeFields (Nếu kéo trực tiếp vào ô badgeFields mà chưa có trong dimensions)
-    if (fields.badgeFields && Array.isArray(fields.badgeFields)) {
-        fields.badgeFields.forEach(f => {
-            const rawIdx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
-            if (rawIdx !== -1) {
-                const existing = displayFields.find(df => df.rawIndex === rawIdx);
-                if (existing) {
-                    existing.isBadgeColumn = true;
-                } else {
-                    displayFields.push({
-                        id: f.id || `badge_${rawIdx}`,
-                        name: f.name || f.id,
-                        rawIndex: rawIdx,
-                        isBadgeColumn: true
-                    });
-                }
-            }
-        });
-    }
-
-    // 3. Metrics
     if (fields.metrics && Array.isArray(fields.metrics)) {
         fields.metrics.forEach(f => {
             const rawIdx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
@@ -336,22 +399,19 @@ function extractDisplayFields(currentData) {
                 displayFields.push({
                     id: f.id || `met_${rawIdx}`,
                     name: f.name || f.id,
-                    rawIndex: rawIdx,
-                    isBadgeColumn: false
+                    rawIndex: rawIdx
                 });
             }
         });
     }
 
-    // Fallback nếu không có phân loại
     if (displayFields.length === 0 && allHeaders.length > 0) {
         allHeaders.forEach((h, idx) => {
             if (!searchFieldIds.includes(h.id) && !searchFieldIds.includes(h.name)) {
                 displayFields.push({
                     id: h.id || `col_${idx}`,
                     name: h.name || h.id,
-                    rawIndex: idx,
-                    isBadgeColumn: badgeFieldIds.includes(h.id) || badgeFieldIds.includes(h.name)
+                    rawIndex: idx
                 });
             }
         });
@@ -368,10 +428,9 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             field: df.name || df.id || `col_${idx}`,
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
-            format: df.isBadgeColumn ? 'badge' : 'auto',
+            format: 'auto',
             color: 'default',
-            rawIndex: df.rawIndex,
-            isBadgeColumn: df.isBadgeColumn
+            rawIndex: df.rawIndex
         }));
     }
 
@@ -386,8 +445,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             usedRawIndices.add(matchedDf.rawIndex);
             result.push({
                 ...ec,
-                rawIndex: matchedDf.rawIndex,
-                isBadgeColumn: matchedDf.isBadgeColumn || ec.format === 'badge'
+                rawIndex: matchedDf.rawIndex
             });
         }
     });
@@ -400,10 +458,9 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: df.name || df.id || `col_${idx}`,
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
-                format: df.isBadgeColumn ? 'badge' : 'auto',
+                format: 'auto',
                 color: 'default',
-                rawIndex: df.rawIndex,
-                isBadgeColumn: df.isBadgeColumn
+                rawIndex: df.rawIndex
             });
         }
     });
@@ -422,7 +479,16 @@ function loadStoredColumnConfigs(displayFields) {
     return syncColumnConfigsWithFields(saved, displayFields);
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG (TABLE COLUMN CONFIG MODAL)
+// HÀM LẤY QUY TẮC MÀU TỪ LOCALSTORAGE
+function loadStoredRules() {
+    try {
+        const item = localStorage.getItem(USER_RULES_STORAGE_KEY);
+        if (item) return JSON.parse(item);
+    } catch (e) { }
+    return [];
+}
+
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG
 function openColumnConfigModal() {
     if (!currentData) return;
     const displayFields = extractDisplayFields(currentData);
@@ -431,7 +497,9 @@ function openColumnConfigModal() {
         return;
     }
 
+    let activeTab = 'columns'; // 'columns' | 'rules'
     let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || loadStoredColumnConfigs(displayFields)));
+    let workingRules = JSON.parse(JSON.stringify(userConditionalRules || loadStoredRules()));
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -441,67 +509,143 @@ function openColumnConfigModal() {
         overlay.innerHTML = `
             <div class="modal-dialog">
                 <div class="modal-header">
-                    <div class="modal-title" style="font-weight:700; color:#1e293b; font-size:14px; display:flex; align-items:center; gap:8px;">
-                        <span>⚙️ Tùy Chỉnh Cột Bảng (Ẩn/Hiện, Tên, Định Dạng & Thứ Tự)</span>
+                    <div class="modal-nav-tabs">
+                        <button class="modal-tab-btn ${activeTab === 'columns' ? 'active' : ''}" id="tab-btn-columns">
+                            📋 Cấu Hình Cột (${workingConfigs.length})
+                        </button>
+                        <button class="modal-tab-btn ${activeTab === 'rules' ? 'active' : ''}" id="tab-btn-rules">
+                            🎨 Quy Tắc Tô Màu & Badge Động (${workingRules.length})
+                        </button>
                     </div>
                     <button class="modal-close-btn" id="btn-close-modal">✕</button>
                 </div>
                 
                 <div class="modal-body">
-                    <table class="col-config-table">
-                        <thead>
-                            <tr>
-                                <th style="width:40px; text-align:center;">STT</th>
-                                <th style="width:70px; text-align:center;">Hiện</th>
-                                <th style="width:170px;">Tên gốc Looker/BQ</th>
-                                <th style="width:210px;">Tên hiển thị (Label)</th>
-                                <th style="width:170px;">Định dạng (Format)</th>
-                                <th style="width:160px;">Màu cột (Color)</th>
-                                <th style="width:90px; text-align:center;">Thứ tự</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${workingConfigs.map((col, idx) => `
+                    ${activeTab === 'columns' ? `
+                        <table class="col-config-table">
+                            <thead>
                                 <tr>
-                                    <td style="text-align:center; color:#94a3b8; font-weight:600;">${idx + 1}</td>
-                                    <td style="text-align:center;">
-                                        <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
-                                    </td>
-                                    <td style="font-family:'JetBrains Mono',monospace; color:#475569; font-size:11px;">${col.field}</td>
-                                    <td>
-                                        <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
-                                    </td>
-                                    <td>
-                                        <select class="col-config-select col-fmt-sel" data-idx="${idx}">
-                                            <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
-                                            <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
-                                            <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
-                                            <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
-                                            <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
-                                            <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
-                                            <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
-                                            <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
-                                            <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <select class="col-config-select col-color-sel" data-idx="${idx}">
-                                            <option value="default" ${col.color === 'default' ? 'selected' : ''}>Mặc định</option>
-                                            <option value="pos_green_neg_red" ${col.color === 'pos_green_neg_red' ? 'selected' : ''}>Dương Xanh / Âm Đỏ</option>
-                                            <option value="green" ${col.color === 'green' ? 'selected' : ''}>Xanh Lá (Green)</option>
-                                            <option value="red" ${col.color === 'red' ? 'selected' : ''}>Đỏ (Red)</option>
-                                            <option value="amber" ${col.color === 'amber' ? 'selected' : ''}>Vàng Cam (Amber)</option>
-                                            <option value="cyan" ${col.color === 'cyan' ? 'selected' : ''}>Xanh Dương (Cyan)</option>
-                                        </select>
-                                    </td>
-                                    <td style="text-align:center; white-space:nowrap;">
-                                        <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
-                                        <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
-                                    </td>
+                                    <th style="width:40px; text-align:center;">STT</th>
+                                    <th style="width:70px; text-align:center;">Hiện</th>
+                                    <th style="width:170px;">Tên gốc Looker/BQ</th>
+                                    <th style="width:210px;">Tên hiển thị (Label)</th>
+                                    <th style="width:170px;">Định dạng (Format)</th>
+                                    <th style="width:160px;">Màu cột (Color)</th>
+                                    <th style="width:90px; text-align:center;">Thứ tự</th>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                ${workingConfigs.map((col, idx) => `
+                                    <tr>
+                                        <td style="text-align:center; color:#94a3b8; font-weight:600;">${idx + 1}</td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" class="col-vis-chk" data-idx="${idx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:16px; height:16px;">
+                                        </td>
+                                        <td style="font-family:'JetBrains Mono',monospace; color:#475569; font-size:11px;">${col.field}</td>
+                                        <td>
+                                            <input type="text" class="col-config-input col-title-inp" data-idx="${idx}" value="${col.title || col.field}">
+                                        </td>
+                                        <td>
+                                            <select class="col-config-select col-fmt-sel" data-idx="${idx}">
+                                                <option value="auto" ${col.format === 'auto' ? 'selected' : ''}>Tự động (Auto)</option>
+                                                <option value="badge" ${col.format === 'badge' ? 'selected' : ''}>Thẻ Badge</option>
+                                                <option value="number_comma" ${col.format === 'number_comma' ? 'selected' : ''}>Số phẩy (1,234,567)</option>
+                                                <option value="number_vn" ${col.format === 'number_vn' ? 'selected' : ''}>Rút gọn VN (1.5 Tr / 2 Tỷ)</option>
+                                                <option value="currency" ${col.format === 'currency' ? 'selected' : ''}>Tiền tệ (1,250,000 ₫)</option>
+                                                <option value="percent" ${col.format === 'percent' ? 'selected' : ''}>Phần trăm (15.5%)</option>
+                                                <option value="date" ${col.format === 'date' ? 'selected' : ''}>Ngày (dd-mm-yyyy)</option>
+                                                <option value="date_ddmmyyyy_hhmmss" ${col.format === 'date_ddmmyyyy_hhmmss' ? 'selected' : ''}>Ngày Giờ (dd-mm-yyyy hh:mm:ss)</option>
+                                                <option value="monospace" ${col.format === 'monospace' ? 'selected' : ''}>Font Code Monospace</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="col-config-select col-color-sel" data-idx="${idx}">
+                                                <option value="default" ${col.color === 'default' ? 'selected' : ''}>Mặc định</option>
+                                                <option value="pos_green_neg_red" ${col.color === 'pos_green_neg_red' ? 'selected' : ''}>Dương Xanh / Âm Đỏ</option>
+                                                <option value="green" ${col.color === 'green' ? 'selected' : ''}>Xanh Lá (Green)</option>
+                                                <option value="red" ${col.color === 'red' ? 'selected' : ''}>Đỏ (Red)</option>
+                                                <option value="amber" ${col.color === 'amber' ? 'selected' : ''}>Vàng Cam (Amber)</option>
+                                                <option value="cyan" ${col.color === 'cyan' ? 'selected' : ''}>Xanh Dương (Cyan)</option>
+                                            </select>
+                                        </td>
+                                        <td style="text-align:center; white-space:nowrap;">
+                                            <button class="btn-move btn-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Di chuyển lên">▲</button>
+                                            <button class="btn-move btn-move-down" data-idx="${idx}" ${idx === workingConfigs.length - 1 ? 'disabled' : ''} title="Di chuyển xuống">▼</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : `
+                        <div>
+                            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
+                                💡 Thiết lập quy tắc điều kiện động (<strong>chứa từ khóa, bằng, lớn hơn, nhỏ hơn, số âm/dương</strong>) để tự động đổi màu chữ hoặc gắn Thẻ Badge.
+                            </div>
+                            <table class="col-config-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:160px;">Cột áp dụng</th>
+                                        <th style="width:170px;">Điều kiện (Operator)</th>
+                                        <th style="width:180px;">Giá trị so sánh</th>
+                                        <th style="width:200px;">Kiểu hiển thị</th>
+                                        <th style="width:50px; text-align:center;">Xóa</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${workingRules.length === 0 ? `
+                                        <tr>
+                                            <td colspan="5" style="text-align:center; padding:30px; color:#94a3b8;">
+                                                Chưa có quy tắc nào. Bấm nút bên dưới để thêm quy tắc mới!
+                                            </td>
+                                        </tr>
+                                    ` : workingRules.map((rule, rIdx) => `
+                                        <tr>
+                                            <td>
+                                                <select class="col-config-select rule-field-sel" data-idx="${rIdx}">
+                                                    <option value="*" ${rule.field === '*' ? 'selected' : ''}>★ Tất cả cột</option>
+                                                    ${workingConfigs.map(c => `<option value="${c.field}" ${rule.field === c.field ? 'selected' : ''}>${c.title || c.field}</option>`).join('')}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="col-config-select rule-op-sel" data-idx="${rIdx}">
+                                                    <option value="contains" ${rule.operator === 'contains' ? 'selected' : ''}>Chứa từ khóa (Contains)</option>
+                                                    <option value="equals" ${rule.operator === 'equals' ? 'selected' : ''}>Bằng chính xác (= Equals)</option>
+                                                    <option value="startsWith" ${rule.operator === 'startsWith' ? 'selected' : ''}>Bắt đầu bằng (Starts with)</option>
+                                                    <option value=">" ${rule.operator === '>' ? 'selected' : ''}>Lớn hơn (&gt;)</option>
+                                                    <option value="<" ${rule.operator === '<' ? 'selected' : ''}>Nhỏ hơn (&lt;)</option>
+                                                    <option value=">=" ${rule.operator === '>=' ? 'selected' : ''}>Lớn hơn hoặc bằng (&gt;=)</option>
+                                                    <option value="<=" ${rule.operator === '<=' ? 'selected' : ''}>Nhỏ hơn hoặc bằng (&lt;=)</option>
+                                                    <option value="pos" ${rule.operator === 'pos' ? 'selected' : ''}>Số dương (&gt;= 0)</option>
+                                                    <option value="neg" ${rule.operator === 'neg' ? 'selected' : ''}>Số âm (&lt; 0)</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="text" class="col-config-input rule-val-inp" data-idx="${rIdx}" placeholder="vd: OFF, Staging, Done, 1000..." value="${rule.value || ''}" ${['pos', 'neg'].includes(rule.operator) ? 'disabled style="background:#f1f5f9;"' : ''}>
+                                            </td>
+                                            <td>
+                                                <select class="col-config-select rule-style-sel" data-idx="${rIdx}">
+                                                    <option value="badge_success" ${rule.style === 'badge_success' ? 'selected' : ''}>🏷️ Badge Xanh Lá (✓ Success)</option>
+                                                    <option value="badge_danger" ${rule.style === 'badge_danger' ? 'selected' : ''}>🏷️ Badge Đỏ (✕ Danger)</option>
+                                                    <option value="badge_warning" ${rule.style === 'badge_warning' ? 'selected' : ''}>🏷️ Badge Vàng (⏳ Warning)</option>
+                                                    <option value="badge_info" ${rule.style === 'badge_info' ? 'selected' : ''}>🏷️ Badge Xanh Dương (Info)</option>
+                                                    <option value="badge_gray" ${rule.style === 'badge_gray' ? 'selected' : ''}>🏷️ Badge Xám (Gray)</option>
+                                                    <option value="color_green" ${rule.style === 'color_green' ? 'selected' : ''}>🎨 Chữ Xanh Lá</option>
+                                                    <option value="color_red" ${rule.style === 'color_red' ? 'selected' : ''}>🎨 Chữ Đỏ</option>
+                                                    <option value="color_amber" ${rule.style === 'color_amber' ? 'selected' : ''}>🎨 Chữ Vàng Cam</option>
+                                                    <option value="color_cyan" ${rule.style === 'color_cyan' ? 'selected' : ''}>🎨 Chữ Xanh Dương</option>
+                                                    <option value="color_pos_neg" ${rule.style === 'color_pos_neg' ? 'selected' : ''}>🎨 Dương Xanh / Âm Đỏ</option>
+                                                </select>
+                                            </td>
+                                            <td style="text-align:center;">
+                                                <button class="btn-del-rule" data-idx="${rIdx}" title="Xóa quy tắc này">🗑️</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            <button class="btn-add-rule" id="btn-add-rule">+ Thêm Quy Tắc Màu / Badge Mới</button>
+                        </div>
+                    `}
                 </div>
                 
                 <div class="modal-footer">
@@ -514,54 +658,107 @@ function openColumnConfigModal() {
             </div>
         `;
 
+        overlay.querySelector('#tab-btn-columns').onclick = () => { activeTab = 'columns'; renderModalContent(); };
+        overlay.querySelector('#tab-btn-rules').onclick = () => { activeTab = 'rules'; renderModalContent(); };
         overlay.querySelector('#btn-close-modal').onclick = () => overlay.remove();
         overlay.querySelector('#btn-cancel-modal').onclick = () => overlay.remove();
 
         function syncInputsBeforeMove() {
-            for (let idx = 0; idx < workingConfigs.length; idx++) {
-                const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
-                const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
-                const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
-                const colorSel = overlay.querySelector(`.col-color-sel[data-idx="${idx}"]`);
-                if (chk) workingConfigs[idx].visible = chk.checked;
-                if (titleInp) workingConfigs[idx].title = titleInp.value;
-                if (fmtSel) workingConfigs[idx].format = fmtSel.value;
-                if (colorSel) workingConfigs[idx].color = colorSel.value;
+            if (activeTab === 'columns') {
+                for (let idx = 0; idx < workingConfigs.length; idx++) {
+                    const chk = overlay.querySelector(`.col-vis-chk[data-idx="${idx}"]`);
+                    const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${idx}"]`);
+                    const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${idx}"]`);
+                    const colorSel = overlay.querySelector(`.col-color-sel[data-idx="${idx}"]`);
+                    if (chk) workingConfigs[idx].visible = chk.checked;
+                    if (titleInp) workingConfigs[idx].title = titleInp.value;
+                    if (fmtSel) workingConfigs[idx].format = fmtSel.value;
+                    if (colorSel) workingConfigs[idx].color = colorSel.value;
+                }
+            } else if (activeTab === 'rules') {
+                for (let idx = 0; idx < workingRules.length; idx++) {
+                    const fieldSel = overlay.querySelector(`.rule-field-sel[data-idx="${idx}"]`);
+                    const opSel = overlay.querySelector(`.rule-op-sel[data-idx="${idx}"]`);
+                    const valInp = overlay.querySelector(`.rule-val-inp[data-idx="${idx}"]`);
+                    const styleSel = overlay.querySelector(`.rule-style-sel[data-idx="${idx}"]`);
+                    if (fieldSel) workingRules[idx].field = fieldSel.value;
+                    if (opSel) workingRules[idx].operator = opSel.value;
+                    if (valInp) workingRules[idx].value = valInp.value;
+                    if (styleSel) workingRules[idx].style = styleSel.value;
+                }
             }
         }
 
-        overlay.querySelectorAll('.btn-move-up').forEach(btn => {
-            btn.onclick = (e) => {
-                syncInputsBeforeMove();
-                const idx = Number(e.currentTarget.dataset.idx);
-                if (idx > 0) {
-                    const temp = workingConfigs[idx];
-                    workingConfigs[idx] = workingConfigs[idx - 1];
-                    workingConfigs[idx - 1] = temp;
-                    renderModalContent();
-                }
-            };
-        });
+        if (activeTab === 'columns') {
+            overlay.querySelectorAll('.btn-move-up').forEach(btn => {
+                btn.onclick = (e) => {
+                    syncInputsBeforeMove();
+                    const idx = Number(e.currentTarget.dataset.idx);
+                    if (idx > 0) {
+                        const temp = workingConfigs[idx];
+                        workingConfigs[idx] = workingConfigs[idx - 1];
+                        workingConfigs[idx - 1] = temp;
+                        renderModalContent();
+                    }
+                };
+            });
 
-        overlay.querySelectorAll('.btn-move-down').forEach(btn => {
-            btn.onclick = (e) => {
-                syncInputsBeforeMove();
-                const idx = Number(e.currentTarget.dataset.idx);
-                if (idx < workingConfigs.length - 1) {
-                    const temp = workingConfigs[idx];
-                    workingConfigs[idx] = workingConfigs[idx + 1];
-                    workingConfigs[idx + 1] = temp;
+            overlay.querySelectorAll('.btn-move-down').forEach(btn => {
+                btn.onclick = (e) => {
+                    syncInputsBeforeMove();
+                    const idx = Number(e.currentTarget.dataset.idx);
+                    if (idx < workingConfigs.length - 1) {
+                        const temp = workingConfigs[idx];
+                        workingConfigs[idx] = workingConfigs[idx + 1];
+                        workingConfigs[idx + 1] = temp;
+                        renderModalContent();
+                    }
+                };
+            });
+        }
+
+        if (activeTab === 'rules') {
+            const addBtn = overlay.querySelector('#btn-add-rule');
+            if (addBtn) {
+                addBtn.onclick = () => {
+                    syncInputsBeforeMove();
+                    workingRules.push({
+                        field: '*',
+                        operator: 'contains',
+                        value: '',
+                        style: 'badge_success'
+                    });
                     renderModalContent();
-                }
-            };
-        });
+                };
+            }
+
+            overlay.querySelectorAll('.rule-op-sel').forEach(sel => {
+                sel.onchange = (e) => {
+                    const idx = Number(e.target.dataset.idx);
+                    workingRules[idx].operator = e.target.value;
+                    syncInputsBeforeMove();
+                    renderModalContent();
+                };
+            });
+
+            overlay.querySelectorAll('.btn-del-rule').forEach(btn => {
+                btn.onclick = (e) => {
+                    syncInputsBeforeMove();
+                    const idx = Number(e.currentTarget.dataset.idx);
+                    workingRules.splice(idx, 1);
+                    renderModalContent();
+                };
+            });
+        }
 
         // Reset toàn bộ về mặc định
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
+                localStorage.removeItem(USER_RULES_STORAGE_KEY);
             } catch (e) { }
             userColumnConfigs = null;
+            userConditionalRules = [];
             overlay.remove();
             renderTable();
         };
@@ -570,8 +767,10 @@ function openColumnConfigModal() {
         overlay.querySelector('#btn-save-modal').onclick = () => {
             syncInputsBeforeMove();
             userColumnConfigs = workingConfigs;
+            userConditionalRules = workingRules;
             try {
                 localStorage.setItem(USER_CONFIG_STORAGE_KEY, JSON.stringify(userColumnConfigs));
+                localStorage.setItem(USER_RULES_STORAGE_KEY, JSON.stringify(userConditionalRules));
             } catch (e) {
                 console.warn('Save localStorage error:', e);
             }
@@ -593,7 +792,7 @@ function renderTable() {
     const wasFocused = (document.activeElement === prevSearchInput);
     const cursorPosition = prevSearchInput ? prevSearchInput.selectionStart : null;
 
-    // Đọc cấu hình từ tab Style & Setup của Looker Studio (Do Admin thiết lập)
+    // Đọc cấu hình từ tab Style & Setup của Looker Studio
     const styleConfig = currentData.style || {};
     const rowDensity = styleConfig.rowDensity?.value || 'normal';
     const tableVariant = styleConfig.tableVariant?.value || 'striped';
@@ -602,11 +801,16 @@ function renderTable() {
     const textWrap = styleConfig.textWrap?.value === true;
     const showSearch = styleConfig.showSearch?.value !== false;
     const showColConfig = styleConfig.showColConfig?.value !== false;
+    const highlightPosNeg = styleConfig.highlightPosNeg?.value === true;
 
-    // Bóc tách quy tắc màu & badges từ Style panel
-    const styleRules = getStyleRules(styleConfig);
+    // Tổng hợp quy tắc động từ Style Panel (Admin DSL) và Modal (User Config)
+    const adminDslRules = parseDslRules(styleConfig.customRulesText?.value);
+    if (!userConditionalRules) {
+        userConditionalRules = loadStoredRules();
+    }
+    const combinedRules = [...adminDslRules, ...userConditionalRules];
 
-    // ĐỒNG BỘ DEFAULT PAGE SIZE TỪ ADMIN SETUP TRONG LOOKER STUDIO
+    // ĐỒNG BỘ DEFAULT PAGE SIZE TỪ ADMIN SETUP
     const adminDefaultPageSize = (styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined)
         ? Number(styleConfig.defaultPageSize.value)
         : 20;
@@ -722,7 +926,7 @@ function renderTable() {
     if (showColConfig) {
         const btnColConfig = document.createElement('button');
         btnColConfig.className = 'btn-col-config';
-        btnColConfig.innerHTML = `<span>⚙️ Cột Bảng</span>`;
+        btnColConfig.innerHTML = `<span>⚙️ Cột Bảng & Màu Sắc</span>`;
         btnColConfig.onclick = openColumnConfigModal;
         toolbarLeft.appendChild(btnColConfig);
     }
@@ -862,8 +1066,8 @@ function renderTable() {
 
                 if (textWrap) td.classList.add('text-wrap-cell');
 
-                // Áp dụng format và style rules từ Setup (badgeFields) & Style panel
-                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, col.isBadgeColumn, styleRules);
+                // Áp dụng định dạng và các quy tắc động > < = contain
+                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, combinedRules, highlightPosNeg);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
