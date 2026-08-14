@@ -454,7 +454,7 @@ function extractDisplayFields(currentData) {
     return displayFields;
 }
 
-// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (GIỮ NGUYÊN THỨ TỰ, ẨN/HIỆN ĐÃ LƯU)
+// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (GIỮ NGUYÊN THỨ TỰ, ẨN/HIỆN, TÌM KIẾM ĐÃ LƯU)
 function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     if (!displayFields || !Array.isArray(displayFields) || displayFields.length === 0) {
         return [];
@@ -466,6 +466,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
             field: df.name || df.id || `col_${idx}`,
             title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
+            searchable: true,
             format: 'auto',
             sort: 'none',
             type: df.type || '',
@@ -487,6 +488,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 ...ec,
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
+                searchable: ec.searchable !== false,
                 sort: ec.sort || 'none',
                 type: matchedDf.type || ec.type || '',
                 rawIndex: matchedDf.rawIndex
@@ -502,6 +504,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: df.name || df.id || `col_${idx}`,
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
+                searchable: true,
                 format: 'auto',
                 sort: 'none',
                 type: df.type || '',
@@ -537,7 +540,7 @@ function loadStoredRules() {
     return [];
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM PHÂN TRANG 10 CỘT)
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM CHỌN CỘT TÌM KIẾM & PHÂN TRANG 10 CỘT)
 function openColumnConfigModal() {
     try {
         if (!currentData) return;
@@ -588,10 +591,11 @@ function openColumnConfigModal() {
                                     <tr>
                                         <th style="width:35px; text-align:center;">STT</th>
                                         <th style="width:45px; text-align:center;">Hiện</th>
-                                        <th style="width:170px;">Tên gốc Looker/BQ</th>
-                                        <th style="width:190px;">Tên hiển thị (Label)</th>
-                                        <th style="width:160px;">Định dạng (Format)</th>
-                                        <th style="width:145px;">Sắp xếp (Sort)</th>
+                                        <th style="width:45px; text-align:center;" title="Tích chọn để ô tìm kiếm nhanh quét trên cột này">🔍 Tìm</th>
+                                        <th style="width:160px;">Tên gốc Looker/BQ</th>
+                                        <th style="width:180px;">Tên hiển thị (Label)</th>
+                                        <th style="width:150px;">Định dạng (Format)</th>
+                                        <th style="width:140px;">Sắp xếp (Sort)</th>
                                         <th style="width:70px; text-align:center;">Thứ tự</th>
                                     </tr>
                                 </thead>
@@ -602,7 +606,10 @@ function openColumnConfigModal() {
                                             <tr>
                                                 <td style="text-align:center; color:#64748b; font-weight:700;">${globalIdx + 1}</td>
                                                 <td style="text-align:center;">
-                                                    <input type="checkbox" class="col-vis-chk" data-idx="${globalIdx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;">
+                                                    <input type="checkbox" class="col-vis-chk" data-idx="${globalIdx}" ${col.visible !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;" title="Bật/Tắt hiển thị cột">
+                                                </td>
+                                                <td style="text-align:center;">
+                                                    <input type="checkbox" class="col-search-chk" data-idx="${globalIdx}" ${col.searchable !== false ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px;" title="Tích để tìm kiếm trên cột này">
                                                 </td>
                                                 <td style="font-family:'JetBrains Mono',monospace; color:#000000; font-size:11.5px; font-weight:600;">${col.field}</td>
                                                 <td>
@@ -743,11 +750,13 @@ function openColumnConfigModal() {
                 if (activeTab === 'columns') {
                     for (let pIdx = 0; pIdx < pagedConfigs.length; pIdx++) {
                         const globalIdx = startColIdx + pIdx;
-                        const chk = overlay.querySelector(`.col-vis-chk[data-idx="${globalIdx}"]`);
+                        const chkVis = overlay.querySelector(`.col-vis-chk[data-idx="${globalIdx}"]`);
+                        const chkSearch = overlay.querySelector(`.col-search-chk[data-idx="${globalIdx}"]`);
                         const titleInp = overlay.querySelector(`.col-title-inp[data-idx="${globalIdx}"]`);
                         const fmtSel = overlay.querySelector(`.col-fmt-sel[data-idx="${globalIdx}"]`);
                         const sortSel = overlay.querySelector(`.col-sort-sel[data-idx="${globalIdx}"]`);
-                        if (chk) workingConfigs[globalIdx].visible = chk.checked;
+                        if (chkVis) workingConfigs[globalIdx].visible = chkVis.checked;
+                        if (chkSearch) workingConfigs[globalIdx].searchable = chkSearch.checked;
                         if (titleInp) workingConfigs[globalIdx].title = titleInp.value;
                         if (fmtSel) workingConfigs[globalIdx].format = fmtSel.value;
                         if (sortSel) workingConfigs[globalIdx].sort = sortSel.value;
@@ -961,21 +970,31 @@ function renderTable() {
         // Lọc ra các cột được phép hiển thị (visible !== false)
         const activeColumns = (userColumnConfigs || []).filter(c => c && c.visible !== false);
 
-        const autoPlaceholder = 'Tìm kiếm nhanh...';
+        // Xác định danh sách cột được tích chọn để tìm kiếm
+        const searchableCols = activeColumns.filter(c => c && c.searchable !== false);
+        const searchColIndices = (searchableCols.length > 0 ? searchableCols : activeColumns).map(c => c.rawIndex);
+        const searchColNames = (searchableCols.length > 0 ? searchableCols : activeColumns).map(c => c.title || c.field);
+
+        let autoPlaceholder = 'Tìm kiếm nhanh...';
+        if (searchColNames.length > 0 && searchColNames.length <= 4) {
+            autoPlaceholder = `Tìm theo: ${searchColNames.join(', ')}...`;
+        } else if (searchColNames.length > 4) {
+            autoPlaceholder = `Tìm kiếm (${searchColNames.length} cột)...`;
+        }
+
         const finalPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value && styleConfig.searchPlaceholder.value.trim() !== '')
             ? styleConfig.searchPlaceholder.value
             : autoPlaceholder;
 
-        // 1. FILTER TÌM KIẾM BỎ DẤU TIẾNG VIỆT (remove_accents)
+        // 1. FILTER TÌM KIẾM BỎ DẤU TIẾNG VIỆT (remove_accents) TRÊN CÁC CỘT ĐƯỢC CHỌN
         let filteredRows = rawRows;
         if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
             const words = remove_accents(tableState.searchQuery.trim()).split(/\s+/).filter(Boolean);
-            const searchCols = activeColumns.map(c => c.rawIndex);
 
             filteredRows = rawRows.filter(row => {
                 if (!row) return false;
                 return words.every(word => {
-                    return searchCols.some(colIdx => {
+                    return searchColIndices.some(colIdx => {
                         const cellVal = row[colIdx];
                         const cleanCell = remove_accents(cellVal);
                         return cleanCell.includes(word);
