@@ -1,15 +1,23 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Biến trạng thái lần đầu render
+// Biến trạng thái toàn cục
 let firstRender = true;
+let currentData = null;
+
+let tableState = {
+    sortColumn: null,      // index cột đang sort (0-based)
+    sortDirection: 'asc',  // 'asc' | 'desc'
+    currentPage: 1,
+    pageSize: 25,          // 10 | 25 | 50 | 100 | -1 (Tất cả)
+    searchQuery: ''
+};
 
 // HÀM HIỂN THỊ SKELETON LOADING (Nhúng trực tiếp CSS để hiển thị tức thì 100%)
 function showSkeleton() {
     try {
         if (!document.body) return;
 
-        // Inject trực tiếp CSS Skeleton vào head nếu chưa có (không phụ thuộc file CSS ngoài)
         if (!document.getElementById('excelviz-skeleton-style')) {
             const style = document.createElement('style');
             style.id = 'excelviz-skeleton-style';
@@ -34,7 +42,7 @@ function showSkeleton() {
                 }
                 .skeleton-btn {
                     width: 210px;
-                    height: 38px;
+                    height: 36px;
                 }
                 .skeleton-table {
                     width: 100%;
@@ -43,11 +51,11 @@ function showSkeleton() {
                     gap: 8px;
                 }
                 .skeleton-header {
-                    height: 36px;
+                    height: 38px;
                     opacity: 0.85;
                 }
                 .skeleton-row {
-                    height: 28px;
+                    height: 30px;
                     opacity: 0.65;
                 }
             `;
@@ -87,7 +95,7 @@ function isValidDate(dateStr) {
     return d instanceof Date && !isNaN(d.getTime());
 }
 
-// HÀM PHỤ: Mở helper page và truyền dữ liệu qua postMessage (polling liên tục để đảm bảo nhận được)
+// HÀM PHỤ: Mở helper page và truyền dữ liệu qua postMessage
 const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart2/downloader.html';
 
 function downloadViaHelper(payload) {
@@ -97,7 +105,6 @@ function downloadViaHelper(payload) {
         return;
     }
 
-    // Polling gửi postMessage mỗi 300ms trong 6s để helper nhận ngay khi sẵn sàng
     let attempts = 0;
     const maxAttempts = 20; // 20 * 300ms = 6 giây
     const interval = setInterval(() => {
@@ -113,28 +120,70 @@ function downloadViaHelper(payload) {
     }, 300);
 }
 
-// HÀM RENDER NỘI DUNG THẬT
-function renderActualTable(data) {
-    if (!document.body) return;
+// HÀM SO SÁNH DỮ LIỆU ĐA KIỂU (Numbers, Dates, Strings tiếng Việt)
+function compareValues(a, b) {
+    if (a === b) return 0;
+    if (a === null || a === undefined || a === '') return 1;
+    if (b === null || b === undefined || b === '') return -1;
 
-    // Xóa skeleton để render nội dung thật
-    document.body.innerHTML = '';
+    // So sánh kiểu số
+    const numA = Number(a);
+    const numB = Number(b);
+    if (!isNaN(numA) && !isNaN(numB) && typeof a !== 'boolean' && typeof b !== 'boolean') {
+        return numA - numB;
+    }
 
-    // Tạo container chính
-    const container = document.createElement('div');
-    container.className = 'container';
+    // So sánh ngày tháng
+    if (isValidDate(String(a)) && isValidDate(String(b))) {
+        return new Date(a).getTime() - new Date(b).getTime();
+    }
 
-    // TẠO NÚT BẤM DOWNLOAD EXCEL
-    const btn = document.createElement('button');
-    btn.className = 'btn-excel';
-    btn.innerHTML = '📊 Xuất File Excel (.xlsx)';
-    container.appendChild(btn);
+    // So sánh chuỗi tiếng Việt chuẩn
+    return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(String(a), String(b));
+}
 
-    // Lấy danh sách tên cột (Headers) từ fields
+// HÀM CONDITIONAL FORMATTING (Định dạng màu sắc / badge tự động)
+function formatCellContent(val) {
+    if (val === null || val === undefined || String(val).trim() === '') {
+        return '';
+    }
+
+    const strVal = String(val).trim();
+    const lowerVal = strVal.toLowerCase();
+
+    // Badges cho trạng thái phổ biến
+    if (lowerVal === 'success' || lowerVal === 'done' || lowerVal === 'hoàn thành' || lowerVal === 'đạt' || lowerVal === 'active' || lowerVal === 'on') {
+        return `<span class="badge-success">${strVal}</span>`;
+    }
+    if (lowerVal === 'fail' || lowerVal === 'failed' || lowerVal === 'cancel' || lowerVal === 'hủy' || lowerVal === 'thất bại' || lowerVal === 'late' || lowerVal === 'off' || lowerVal === 'chưa đạt') {
+        return `<span class="badge-danger">${strVal}</span>`;
+    }
+    if (lowerVal === 'pending' || lowerVal === 'staging' || lowerVal === 'chờ xử lý' || lowerVal === 'đang xử lý' || lowerVal === 'warning') {
+        return `<span class="badge-warning">${strVal}</span>`;
+    }
+    if (lowerVal === 'ch-replace' || lowerVal === 'info' || lowerVal === 'staging') {
+        return `<span class="badge-info">${strVal}</span>`;
+    }
+
+    // Định dạng số âm
+    const numVal = Number(val);
+    if (!isNaN(numVal) && typeof val !== 'boolean' && !isValidDate(strVal)) {
+        if (numVal < 0) {
+            return `<span class="cell-negative">${numVal.toLocaleString('vi-VN')}</span>`;
+        }
+        return numVal.toLocaleString('vi-VN');
+    }
+
+    return strVal;
+}
+
+// HÀM RENDER BẢNG CHÍNH VỚI SORT, PAGINATION, SEARCH, EXCEL
+function renderTable() {
+    if (!document.body || !currentData) return;
+
+    // Trích xuất headers
     const headers = [];
-    const fields = data.fields || {};
-
-    // Duyệt tất cả concept keys (dimensions, metrics...)
+    const fields = currentData.fields || {};
     Object.keys(fields).forEach(conceptKey => {
         const conceptFields = fields[conceptKey];
         if (Array.isArray(conceptFields)) {
@@ -144,32 +193,156 @@ function renderActualTable(data) {
         }
     });
 
-    // Lấy rows từ bảng DEFAULT
-    const rows = (data.tables && data.tables.DEFAULT) ? data.tables.DEFAULT.rows : [];
+    // Lấy toàn bộ rows từ data source (raw dataset)
+    const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // TẠO BẢNG HTML ĐỂ PREVIEW TRÊN DASHBOARD
+    // 1. FILTER THEO TÌM KIẾM
+    let filteredRows = rawRows;
+    if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
+        const q = tableState.searchQuery.trim().toLowerCase();
+        filteredRows = rawRows.filter(row => {
+            return row.some(cell => String(cell || '').toLowerCase().includes(q));
+        });
+    }
+
+    // 2. SORT DỮ LIỆU
+    let sortedRows = [...filteredRows];
+    if (tableState.sortColumn !== null && tableState.sortColumn >= 0 && tableState.sortColumn < headers.length) {
+        const colIdx = tableState.sortColumn;
+        const dir = tableState.sortDirection === 'desc' ? -1 : 1;
+        sortedRows.sort((rowA, rowB) => {
+            return dir * compareValues(rowA[colIdx], rowB[colIdx]);
+        });
+    }
+
+    // 3. PHÂN TRANG (PAGINATION)
+    const totalRows = sortedRows.length;
+    const pageSize = tableState.pageSize === -1 ? totalRows : tableState.pageSize;
+    const totalPages = Math.max(1, Math.ceil(totalRows / (pageSize || 1)));
+    
+    // Đảm bảo currentPage hợp lệ
+    if (tableState.currentPage > totalPages) tableState.currentPage = totalPages;
+    if (tableState.currentPage < 1) tableState.currentPage = 1;
+
+    const startIdx = (tableState.currentPage - 1) * pageSize;
+    const endIdx = tableState.pageSize === -1 ? totalRows : Math.min(startIdx + pageSize, totalRows);
+    const pageRows = sortedRows.slice(startIdx, endIdx);
+
+    // DỰNG GIAO DIỆN HTML
+    document.body.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-wrapper';
+
+    // 1. TOOLBAR PHÍA TRÊN (Nút Export Excel + Ô Tìm Kiếm + Chọn số dòng/trang)
+    const toolbar = document.createElement('div');
+    toolbar.className = 'table-toolbar';
+
+    // Toolbar Left
+    const toolbarLeft = document.createElement('div');
+    toolbarLeft.className = 'toolbar-left';
+
+    const btnExcel = document.createElement('button');
+    btnExcel.className = 'btn-excel';
+    btnExcel.innerHTML = `📊 Xuất Excel (${rawRows.length.toLocaleString('vi-VN')} dòng)`;
+    toolbarLeft.appendChild(btnExcel);
+
+    const searchInput = document.createElement('input');
+    searchInput.className = 'search-input';
+    searchInput.type = 'text';
+    searchInput.placeholder = '🔍 Tìm kiếm nhanh...';
+    searchInput.value = tableState.searchQuery;
+    searchInput.addEventListener('input', (e) => {
+        tableState.searchQuery = e.target.value;
+        tableState.currentPage = 1;
+        renderTable();
+    });
+    toolbarLeft.appendChild(searchInput);
+
+    toolbar.appendChild(toolbarLeft);
+
+    // Toolbar Right (Chọn Rows/Page)
+    const toolbarRight = document.createElement('div');
+    toolbarRight.className = 'toolbar-right';
+    toolbarRight.innerHTML = `<span>Dòng/trang:</span>`;
+
+    const pageSelect = document.createElement('select');
+    pageSelect.className = 'page-size-select';
+    [10, 25, 50, 100, -1].forEach(size => {
+        const opt = document.createElement('option');
+        opt.value = size;
+        opt.textContent = size === -1 ? 'Tất cả' : size;
+        if (tableState.pageSize === size) opt.selected = true;
+        pageSelect.appendChild(opt);
+    });
+    pageSelect.addEventListener('change', (e) => {
+        tableState.pageSize = Number(e.target.value);
+        tableState.currentPage = 1;
+        renderTable();
+    });
+    toolbarRight.appendChild(pageSelect);
+
+    toolbar.appendChild(toolbarRight);
+    wrapper.appendChild(toolbar);
+
+    // 2. KHUNG CHỨA BẢNG CUỘN ĐƯỢC (STICKY HEADER)
+    const scrollContainer = document.createElement('div');
+    scrollContainer.className = 'table-scroll-container';
+
     const table = document.createElement('table');
     table.className = 'preview-table';
 
-    // Tạo dòng Header cho bảng HTML
+    // THEAD
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    headers.forEach(hText => {
+
+    headers.forEach((hText, colIndex) => {
         const th = document.createElement('th');
-        th.innerText = hText;
+        const isSorted = tableState.sortColumn === colIndex;
+        if (isSorted) th.className = 'th-sorted';
+
+        let icon = '↕';
+        if (isSorted) {
+            icon = tableState.sortDirection === 'asc' ? '▲' : '▼';
+        }
+
+        th.innerHTML = `
+            <div class="th-content">
+                <span>${hText}</span>
+                <span class="sort-icon">${icon}</span>
+            </div>
+        `;
+
+        th.addEventListener('click', () => {
+            if (tableState.sortColumn === colIndex) {
+                tableState.sortDirection = tableState.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                tableState.sortColumn = colIndex;
+                tableState.sortDirection = 'asc';
+            }
+            renderTable();
+        });
+
         headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
-    // Đổ dữ liệu vào các dòng (Rows) cho bảng HTML Preview
+    // TBODY
     const tbody = document.createElement('tbody');
-    if (rows && rows.length > 0) {
-        rows.forEach(rowData => {
+    if (pageRows.length > 0) {
+        pageRows.forEach(row => {
             const tr = document.createElement('tr');
-            rowData.forEach(cellData => {
+            headers.forEach((_, colIndex) => {
                 const td = document.createElement('td');
-                td.innerText = (cellData === null || cellData === undefined) ? '' : String(cellData);
+                const cellVal = row[colIndex];
+                
+                // Kiểm tra căn lề phải cho cột số
+                if (!isNaN(cellVal) && cellVal !== null && cellVal !== '' && typeof cellVal !== 'boolean' && !isValidDate(String(cellVal))) {
+                    td.className = 'cell-number';
+                }
+
+                td.innerHTML = formatCellContent(cellVal);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
@@ -179,20 +352,116 @@ function renderActualTable(data) {
         const td = document.createElement('td');
         td.colSpan = headers.length || 1;
         td.style.textAlign = 'center';
-        td.style.padding = '20px';
+        td.style.padding = '30px';
         td.style.color = '#9ca3af';
-        td.innerText = 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
+        td.innerText = tableState.searchQuery ? 'Không tìm thấy dữ liệu phù hợp.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
         tr.appendChild(td);
         tbody.appendChild(tr);
     }
     table.appendChild(tbody);
-    container.appendChild(table);
-    document.body.appendChild(container);
+    scrollContainer.appendChild(table);
+    wrapper.appendChild(scrollContainer);
 
-    // XỬ LÝ SỰ KIỆN CLICK NÚT DOWNLOAD EXCEL
-    btn.addEventListener('click', () => {
+    // 3. PAGINATION FOOTER
+    const paginationFooter = document.createElement('div');
+    paginationFooter.className = 'table-pagination';
+
+    const pageInfo = document.createElement('div');
+    pageInfo.className = 'pagination-info';
+    if (totalRows > 0) {
+        pageInfo.textContent = `Hiển thị ${startIdx + 1}–${endIdx} trên tổng số ${totalRows.toLocaleString('vi-VN')} dòng`;
+    } else {
+        pageInfo.textContent = '0 dòng';
+    }
+    paginationFooter.appendChild(pageInfo);
+
+    const paginationControls = document.createElement('div');
+    paginationControls.className = 'pagination-controls';
+
+    if (totalPages > 1 && tableState.pageSize !== -1) {
+        // Nút Trước
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'page-btn';
+        prevBtn.textContent = '‹ Trước';
+        prevBtn.disabled = tableState.currentPage === 1;
+        prevBtn.addEventListener('click', () => {
+            if (tableState.currentPage > 1) {
+                tableState.currentPage--;
+                renderTable();
+            }
+        });
+        paginationControls.appendChild(prevBtn);
+
+        // Hiển thị các nút số trang thông minh (max 5 trang xung quanh)
+        let startPage = Math.max(1, tableState.currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        if (startPage > 1) {
+            const firstPageBtn = document.createElement('button');
+            firstPageBtn.className = 'page-btn';
+            firstPageBtn.textContent = '1';
+            firstPageBtn.addEventListener('click', () => { tableState.currentPage = 1; renderTable(); });
+            paginationControls.appendChild(firstPageBtn);
+
+            if (startPage > 2) {
+                const dots = document.createElement('span');
+                dots.textContent = '...';
+                dots.style.padding = '0 4px';
+                paginationControls.appendChild(dots);
+            }
+        }
+
+        for (let p = startPage; p <= endPage; p++) {
+            const pBtn = document.createElement('button');
+            pBtn.className = `page-btn ${p === tableState.currentPage ? 'active' : ''}`;
+            pBtn.textContent = p;
+            pBtn.addEventListener('click', () => {
+                tableState.currentPage = p;
+                renderTable();
+            });
+            paginationControls.appendChild(pBtn);
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const dots = document.createElement('span');
+                dots.textContent = '...';
+                dots.style.padding = '0 4px';
+                paginationControls.appendChild(dots);
+            }
+            const lastPageBtn = document.createElement('button');
+            lastPageBtn.className = 'page-btn';
+            lastPageBtn.textContent = totalPages;
+            lastPageBtn.addEventListener('click', () => { tableState.currentPage = totalPages; renderTable(); });
+            paginationControls.appendChild(lastPageBtn);
+        }
+
+        // Nút Sau
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'page-btn';
+        nextBtn.textContent = 'Sau ›';
+        nextBtn.disabled = tableState.currentPage === totalPages;
+        nextBtn.addEventListener('click', () => {
+            if (tableState.currentPage < totalPages) {
+                tableState.currentPage++;
+                renderTable();
+            }
+        });
+        paginationControls.appendChild(nextBtn);
+    }
+
+    paginationFooter.appendChild(paginationControls);
+    wrapper.appendChild(paginationFooter);
+
+    document.body.appendChild(wrapper);
+
+    // SỰ KIỆN XUẤT FILE EXCEL: XUẤT TOÀN BỘ DATASET ĐÃ LỌC
+    btnExcel.addEventListener('click', () => {
         try {
-            if (!rows || rows.length === 0) {
+            if (!rawRows || rawRows.length === 0) {
                 alert('Không có dữ liệu để xuất file!');
                 return;
             }
@@ -202,8 +471,10 @@ function renderActualTable(data) {
                 return;
             }
 
-            // Biến đổi dữ liệu thô thành mảng object chuẩn
-            const excelData = rows.map(row => {
+            // Xuất toàn bộ sortedRows (toàn bộ dòng, đã sort)
+            const rowsToExport = sortedRows.length > 0 ? sortedRows : rawRows;
+
+            const excelData = rowsToExport.map(row => {
                 let rowObject = {};
                 headers.forEach((headerName, index) => {
                     const cellValue = row[index];
@@ -223,11 +494,10 @@ function renderActualTable(data) {
             const todayStr = new Date().toISOString().slice(0, 10);
             const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
 
-            // Gửi dữ liệu sang helper page
             downloadViaHelper({
                 type: 'EXCEL_DOWNLOAD',
                 headers: headers,
-                rows: rows,
+                rows: rowsToExport,
                 excelData: excelData,
                 fileName: fileName
             });
@@ -239,18 +509,20 @@ function renderActualTable(data) {
     });
 }
 
-// HÀM CHÍNH: Vẽ giao diện và xử lý dữ liệu từ Looker Studio
+// HÀM NHẬN DỮ LIỆU TỪ LOOKER STUDIO
 function drawVisualization(data) {
     try {
         if (!document.body) return;
 
-        // Giữ skeleton tối thiểu 700ms ở lần nạp đầu tiên để mắt người nhìn thấy hiệu ứng loading mượt mà
+        currentData = data;
+
         const delay = firstRender ? 700 : 0;
         firstRender = false;
 
         setTimeout(() => {
-            renderActualTable(data);
+            renderTable();
         }, delay);
+
     } catch (err) {
         console.error('[ExcelViz] drawVisualization error:', err);
     }

@@ -1,72 +1,292 @@
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     padding: 10px;
     margin: 0;
     background-color: #ffffff;
+    color: #1f2937;
+    box-sizing: border-box;
 }
 
-.container {
+* {
+    box-sizing: border-box;
+}
+
+.table-wrapper {
     display: flex;
     flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+    gap: 8px;
+    overflow: hidden;
+}
+
+/* TOP TOOLBAR */
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
+    flex-wrap: wrap;
+    padding: 2px 0;
+    flex-shrink: 0;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4b5563;
 }
 
 .btn-excel {
-    align-self: flex-start;
     background-color: #107c41;
     color: white;
     border: none;
-    padding: 10px 16px;
-    font-size: 14px;
-    font-weight: bold;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    transition: all 0.15s ease-in-out;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
 }
 
 .btn-excel:hover {
     background-color: #0b592e;
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12);
+}
+
+.btn-excel:active {
+    transform: translateY(0);
+}
+
+.search-input {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.15s;
+    width: 180px;
+}
+
+.search-input:focus {
+    border-color: #107c41;
+    box-shadow: 0 0 0 2px rgba(16, 124, 65, 0.15);
+    width: 230px;
+}
+
+.page-size-select {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 13px;
+    outline: none;
+    background: white;
+    color: #374151;
+    cursor: pointer;
+}
+
+.page-size-select:focus {
+    border-color: #107c41;
+}
+
+/* TABLE SCROLL CONTAINER */
+.table-scroll-container {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
 .preview-table {
     border-collapse: collapse;
     width: 100%;
     font-size: 13px;
+    text-align: left;
+}
+
+.preview-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
 }
 
 .preview-table th {
-    background-color: #f3f4f6;
-    color: #374151;
-    text-align: left;
-    padding: 9px 12px;
-    border-bottom: 2px solid #e5e7eb;
+    background-color: #f8fafc;
+    color: #334155;
+    padding: 10px 14px;
+    border-bottom: 2px solid #e2e8f0;
     font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.preview-table th:hover {
+    background-color: #f1f5f9;
+}
+
+.th-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sort-icon {
+    font-size: 11px;
+    color: #94a3b8;
+    display: inline-block;
+    transition: color 0.15s;
+}
+
+.th-sorted .sort-icon {
+    color: #107c41;
+    font-weight: bold;
 }
 
 .preview-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #f3f4f6;
-    color: #4b5563;
+    padding: 8px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    white-space: nowrap;
 }
 
-.preview-table tr:hover td {
-    background-color: #f9fafb;
+.preview-table tbody tr {
+    transition: background-color 0.1s;
+}
+
+.preview-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.row-index {
+    color: #94a3b8;
+    font-size: 11px;
+    width: 36px;
+    text-align: center;
+}
+
+/* CONDITIONAL FORMATTING BADGES */
+.badge-success {
+    background-color: #dcfce7;
+    color: #15803d;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-danger {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #b45309;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-info {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.cell-number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.cell-negative {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* PAGINATION FOOTER */
+.table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #64748b;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pagination-info {
+    font-weight: 500;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.page-btn {
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #334155;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 30px;
+    text-align: center;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.page-btn.active {
+    background: #107c41;
+    color: white;
+    border-color: #107c41;
 }
 
 /* SKELETON LOADING SHIMMER ANIMATION */
 @keyframes shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
 }
 
 .skeleton {
@@ -78,7 +298,7 @@ body {
 
 .skeleton-btn {
     width: 210px;
-    height: 38px;
+    height: 34px;
 }
 
 .skeleton-table {
@@ -89,13 +309,11 @@ body {
 }
 
 .skeleton-header {
-    height: 36px;
-    border-radius: 6px;
+    height: 38px;
     opacity: 0.85;
 }
 
 .skeleton-row {
-    height: 28px;
-    border-radius: 4px;
+    height: 32px;
     opacity: 0.65;
 }
