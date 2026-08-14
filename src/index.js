@@ -5,7 +5,7 @@ import * as dscc from '@google/dscc';
 let currentData = null;
 
 const runtimeState = {
-    sortOverride: null,       // { slot: number, direction: 'asc'|'desc' } | null
+    sortOverride: null,       // { rawIndex: number, name: string, direction: 'asc'|'desc' } | null
     currentPage: 1,
     pageSizeOverride: null,   // number | null (null: dùng default từ Style)
     hiddenColumns: new Set(), // Set chứa fieldId hoặc tên cột bị ẩn tạm thời trong runtime
@@ -198,27 +198,24 @@ function compareValues(a, b, fieldType = '') {
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
 }
 
-// HÀM XÂY DỰNG BASE COLUMNS CỐ ĐỊNH (SLOT c0, c1, c2, ...)
-function buildBaseColumns(currentData) {
+// HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ CỦA BẢNG (DIMENSIONS + METRICS TỪ SETUP)
+function extractTableColumns(currentData) {
     if (!currentData) return [];
     const fields = currentData.fields || {};
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
         ? currentData.tables.DEFAULT.headers
         : [];
-    const baseCols = [];
+    const cols = [];
 
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
         fields.dimensions.forEach((f, fIdx) => {
             if (!f) return;
             const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === f.id) || h.name === f.name));
             const actualIdx = rawIdx !== -1 ? rawIdx : fIdx;
-            if (!baseCols.some(bc => bc.rawIndex === actualIdx)) {
-                const slot = baseCols.length;
-                baseCols.push({
-                    slot: slot,
-                    key: `c${slot}`,
+            if (!cols.some(c => c.rawIndex === actualIdx)) {
+                cols.push({
                     fieldId: f.id || `dim_${actualIdx}`,
-                    name: f.name || f.id || `Cột ${slot + 1}`,
+                    name: f.name || f.id || `Cột ${cols.length + 1}`,
                     type: (allHeaders[actualIdx] && allHeaders[actualIdx].type) || f.type || '',
                     rawIndex: actualIdx
                 });
@@ -230,14 +227,11 @@ function buildBaseColumns(currentData) {
         fields.metrics.forEach((f, fIdx) => {
             if (!f) return;
             const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === f.id) || h.name === f.name));
-            const actualIdx = rawIdx !== -1 ? rawIdx : (baseCols.length + fIdx);
-            if (!baseCols.some(bc => bc.rawIndex === actualIdx)) {
-                const slot = baseCols.length;
-                baseCols.push({
-                    slot: slot,
-                    key: `c${slot}`,
+            const actualIdx = rawIdx !== -1 ? rawIdx : (cols.length + fIdx);
+            if (!cols.some(c => c.rawIndex === actualIdx)) {
+                cols.push({
                     fieldId: f.id || `met_${actualIdx}`,
-                    name: f.name || f.id || `Cột ${slot + 1}`,
+                    name: f.name || f.id || `Cột ${cols.length + 1}`,
                     type: (allHeaders[actualIdx] && allHeaders[actualIdx].type) || f.type || '',
                     rawIndex: actualIdx
                 });
@@ -245,12 +239,10 @@ function buildBaseColumns(currentData) {
         });
     }
 
-    if (baseCols.length === 0 && allHeaders.length > 0) {
+    if (cols.length === 0 && allHeaders.length > 0) {
         allHeaders.forEach((h, idx) => {
             if (!h) return;
-            baseCols.push({
-                slot: idx,
-                key: `c${idx}`,
+            cols.push({
                 fieldId: h.id || `col_${idx}`,
                 name: h.name || h.id || `Cột ${idx + 1}`,
                 type: h.type || '',
@@ -259,17 +251,108 @@ function buildBaseColumns(currentData) {
         });
     }
 
-    return baseCols;
+    return cols;
 }
 
-// HÀM LẤY QUY TẮC TÔ MÀU TỪ LOOKER STYLE PANEL (RULES 1–5 CỐ ĐỊNH, FIRST MATCH WINS)
-function extractStyleConditionalRules(styleConfig) {
+// HÀM TRÍCH XUẤT CÁC CỘT TÌM KIẾM TỪ SETUP (searchFields)
+function extractSearchColumns(currentData, tableColumns) {
+    if (!currentData) return tableColumns;
+    const fields = currentData.fields || {};
+    const setupSearchFields = fields.searchFields || [];
+
+    if (Array.isArray(setupSearchFields) && setupSearchFields.length > 0) {
+        const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
+            ? currentData.tables.DEFAULT.headers
+            : [];
+
+        const matchedSearchCols = [];
+        setupSearchFields.forEach(sf => {
+            if (!sf) return;
+            const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === sf.id) || h.name === sf.name));
+            if (rawIdx !== -1 && !matchedSearchCols.some(mc => mc.rawIndex === rawIdx)) {
+                matchedSearchCols.push({
+                    fieldId: sf.id,
+                    name: sf.name || sf.id,
+                    type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || sf.type || '',
+                    rawIndex: rawIdx
+                });
+            }
+        });
+
+        if (matchedSearchCols.length > 0) {
+            return matchedSearchCols;
+        }
+    }
+
+    // Mặc định nếu không chọn searchFields: tìm trên tất cả các cột của bảng
+    return tableColumns;
+}
+
+// HÀM TRÍCH XUẤT CẤU HÌNH SORT MULTI-LEVEL TỪ SETUP & STYLE (TỐI ĐA 3 CẤP)
+function extractSetupSortConfig(currentData, styleConfig) {
+    if (!currentData) return [];
+    const fields = currentData.fields || {};
+    const sortDims = Array.isArray(fields.sortDimensions) ? fields.sortDimensions : [];
+    const sortMets = Array.isArray(fields.sortMetrics) ? fields.sortMetrics : [];
+    const allSetupSort = [...sortDims, ...sortMets].slice(0, 3);
+
+    if (allSetupSort.length === 0) return [];
+
+    const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
+        ? currentData.tables.DEFAULT.headers
+        : [];
+
+    const directions = [
+        (styleConfig.sort1Direction && styleConfig.sort1Direction.value) || 'asc',
+        (styleConfig.sort2Direction && styleConfig.sort2Direction.value) || 'asc',
+        (styleConfig.sort3Direction && styleConfig.sort3Direction.value) || 'asc'
+    ];
+
+    const sortLevels = [];
+    allSetupSort.forEach((sf, idx) => {
+        if (!sf) return;
+        const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === sf.id) || h.name === sf.name));
+        if (rawIdx !== -1) {
+            sortLevels.push({
+                level: idx + 1,
+                fieldId: sf.id,
+                name: sf.name || sf.id,
+                rawIndex: rawIdx,
+                direction: directions[idx] || 'asc',
+                type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || sf.type || ''
+            });
+        }
+    });
+
+    return sortLevels;
+}
+
+// HÀM TRÍCH XUẤT QUY TẮC TÔ MÀU / BADGE TỪ SETUP & STYLE (RULES 1–5)
+function extractSetupConditionalRules(currentData, styleConfig) {
+    if (!currentData) return [];
+    const fields = currentData.fields || {};
+    const condDims = Array.isArray(fields.conditionalFields) ? fields.conditionalFields : [];
+    const condMets = Array.isArray(fields.conditionalMetricFields) ? fields.conditionalMetricFields : [];
+    const allSetupCond = [...condDims, ...condMets].slice(0, 5);
+
+    const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
+        ? currentData.tables.DEFAULT.headers
+        : [];
+
     const rules = [];
     for (let i = 1; i <= 5; i++) {
         const enabled = styleConfig[`rule${i}_enable`] && styleConfig[`rule${i}_enable`].value === true;
         if (!enabled) continue;
 
-        const colSlot = (styleConfig[`rule${i}_column`] && styleConfig[`rule${i}_column`].value) || '*';
+        const boundField = allSetupCond[i - 1]; // Setup mapping: Rule 1 -> Field 1, Rule 2 -> Field 2...
+        let rawIdx = -1;
+        let fieldName = '*';
+
+        if (boundField) {
+            rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === boundField.id) || h.name === boundField.name));
+            fieldName = boundField.name || boundField.id;
+        }
+
         const operator = (styleConfig[`rule${i}_operator`] && styleConfig[`rule${i}_operator`].value) || 'contains';
         const value = (styleConfig[`rule${i}_value`] && styleConfig[`rule${i}_value`].value !== undefined) ? String(styleConfig[`rule${i}_value`].value) : '';
         const value2 = (styleConfig[`rule${i}_value2`] && styleConfig[`rule${i}_value2`].value !== undefined) ? String(styleConfig[`rule${i}_value2`].value) : '';
@@ -277,18 +360,20 @@ function extractStyleConditionalRules(styleConfig) {
 
         rules.push({
             ruleIndex: i,
-            columnSlot: colSlot, // '*' hoặc 'c0', 'c1', ...
+            rawIndex: rawIdx, // -1 nếu áp dụng tất cả các cột
+            fieldName: fieldName,
             operator: operator,
             value: value,
             value2: value2,
             style: style
         });
     }
+
     return rules;
 }
 
 // HÀM ĐÁNH GIÁ QUY TẮC ĐIỀU KIỆN ĐỘNG CHO MỘT Ô DỮ LIỆU
-function evaluateConditionalRule(colSlotKey, val, rules, fieldType = '') {
+function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
     if (!rules || rules.length === 0) return null;
 
     const isNum = isNumericValue(val, fieldType);
@@ -297,7 +382,7 @@ function evaluateConditionalRule(colSlotKey, val, rules, fieldType = '') {
     const strNormalized = remove_accents(str);
 
     for (const rule of rules) {
-        if (rule.columnSlot !== '*' && rule.columnSlot !== colSlotKey) {
+        if (rule.rawIndex !== -1 && rule.rawIndex !== rawIdx) {
             continue;
         }
 
@@ -350,7 +435,7 @@ function evaluateConditionalRule(colSlotKey, val, rules, fieldType = '') {
 }
 
 // HÀM FORMAT CELL TOÀN DIỆN
-function formatTableCell(colSlotKey, val, rules, fieldType = '') {
+function formatTableCell(rawIdx, val, rules, fieldType = '') {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
@@ -367,7 +452,7 @@ function formatTableCell(colSlotKey, val, rules, fieldType = '') {
         formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
     }
 
-    const ruleStyle = evaluateConditionalRule(colSlotKey, val, rules, fieldType);
+    const ruleStyle = evaluateConditionalRule(rawIdx, val, rules, fieldType);
     if (ruleStyle) {
         if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
         if (ruleStyle === 'badge_danger') return `<span class="badge badge-danger">✕ ${str}</span>`;
@@ -388,43 +473,39 @@ function formatTableCell(colSlotKey, val, rules, fieldType = '') {
     return formattedVal;
 }
 
-// HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (HIỂN THỊ MAPPING COLUMN 1..N CHO EDITOR TIỆN XEM)
-function openRuntimeColumnsPopup(baseColumns) {
+// HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (TỰ KHÔI PHỤC KHI F5)
+function openRuntimeColumnsPopup(tableColumns) {
     try {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'runtime-columns-modal';
 
         overlay.innerHTML = `
-            <div class="modal-dialog" style="max-width: 540px;">
+            <div class="modal-dialog" style="max-width: 480px;">
                 <div class="modal-header">
-                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">👁️ Ẩn / Hiện Cột & Thứ Tự Style (Runtime)</span>
+                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">👁️ Ẩn / Hiện Cột Hiển Thị (Runtime)</span>
                     <button class="modal-close-btn" id="btn-close-col-modal">✕</button>
                 </div>
-                <div class="modal-body" style="max-height: 62vh; overflow-y: auto;">
-                    <div style="font-size: 11.5px; color: #475569; margin-bottom: 8px; line-height: 1.45;">
-                        💡 <strong>Vị trí Style:</strong> Dùng để đối chiếu khi bạn thiết lập <em>Sắp xếp (Sorting)</em> hoặc <em>Quy tắc tô màu (Rules)</em> trong tab Style của Looker Studio.
+                <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                    <div style="font-size: 11.5px; color: #64748b; margin-bottom: 8px;">
+                        💡 Tích chọn các cột cần xem. Trạng thái chỉ áp dụng trong phiên xem và tự động khôi phục khi F5.
                     </div>
                     <table class="col-config-table">
                         <thead>
                             <tr>
                                 <th style="width: 45px; text-align: center;">STT</th>
                                 <th style="width: 50px; text-align: center;">Hiện</th>
-                                <th style="width: 140px;">Vị trí Style</th>
                                 <th>Tên Cột (Looker Setup)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${baseColumns.map((col, idx) => {
+                            ${tableColumns.map((col, idx) => {
                                 const isVisible = !runtimeState.hiddenColumns.has(col.fieldId) && !runtimeState.hiddenColumns.has(col.name);
                                 return `
                                     <tr>
                                         <td style="text-align: center; color: #64748b; font-weight: 700;">${idx + 1}</td>
                                         <td style="text-align: center;">
                                             <input type="checkbox" class="runtime-col-chk" data-field-id="${col.fieldId}" data-field-name="${col.name}" ${isVisible ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
-                                        </td>
-                                        <td style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700; color: #15803d;">
-                                            Column ${idx + 1} (${col.key})
                                         </td>
                                         <td style="font-weight: 600; color: #0f172a;">${col.name}</td>
                                     </tr>
@@ -485,9 +566,12 @@ function renderTable() {
         const wasFocused = (document.activeElement === prevSearchInput);
         const cursorPosition = prevSearchInput ? prevSearchInput.selectionStart : null;
 
-        // 1. ĐỌC CẤU HÌNH TỪ LOOKER STYLE & SETUP
+        // 1. TRÍCH XUẤT CÁC CỘT BẢNG TỪ SETUP
         const styleConfig = currentData.style || {};
-        const baseColumns = buildBaseColumns(currentData);
+        const tableColumns = extractTableColumns(currentData);
+        const searchColumns = extractSearchColumns(currentData, tableColumns);
+        const setupSortLevels = extractSetupSortConfig(currentData, styleConfig);
+        const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig);
 
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
@@ -498,10 +582,7 @@ function renderTable() {
         const showColPopup = styleConfig.showColPopup ? styleConfig.showColPopup.value !== false : true;
         const allowHeaderSort = styleConfig.allowHeaderSort ? styleConfig.allowHeaderSort.value !== false : true;
 
-        // Đọc rules conditional formatting từ Style
-        const conditionalRules = extractStyleConditionalRules(styleConfig);
-
-        // Khởi tạo search text từ Style default khi load lần đầu hoặc khi Style thay đổi trong Edit mode
+        // Khởi tạo search text từ Style default
         const defaultSearchTextFromStyle = (styleConfig.defaultSearchText && styleConfig.defaultSearchText.value !== undefined) ? String(styleConfig.defaultSearchText.value) : '';
         if (!searchInitialized || defaultSearchTextFromStyle !== lastDefaultSearchText) {
             runtimeState.searchText = defaultSearchTextFromStyle;
@@ -510,19 +591,16 @@ function renderTable() {
         }
 
         // 2. XÁC ĐỊNH VISIBLE COLUMNS
-        const visibleColumns = baseColumns.filter(c => !runtimeState.hiddenColumns.has(c.fieldId) && !runtimeState.hiddenColumns.has(c.name));
+        const visibleColumns = tableColumns.filter(c => !runtimeState.hiddenColumns.has(c.fieldId) && !runtimeState.hiddenColumns.has(c.name));
 
         // 3. RAW DATA
         const rawRows = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.rows))
             ? currentData.tables.DEFAULT.rows
             : [];
 
-        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING
-        const searchScope = (styleConfig.searchScope && styleConfig.searchScope.value) || 'visible';
+        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING (TRÊN searchColumns TỪ SETUP)
         const searchMode = (styleConfig.searchMode && styleConfig.searchMode.value) || 'contains';
         const caseSensitive = styleConfig.searchCaseSensitive ? styleConfig.searchCaseSensitive.value === true : false;
-
-        const searchCols = (searchScope === 'all') ? baseColumns : visibleColumns;
 
         let filteredRows = rawRows;
         if (runtimeState.searchText && runtimeState.searchText.trim() !== '') {
@@ -532,7 +610,7 @@ function renderTable() {
 
             filteredRows = rawRows.filter(row => {
                 if (!row) return false;
-                return searchCols.some(col => {
+                return searchColumns.some(col => {
                     const rawVal = row[col.rawIndex];
                     if (rawVal === null || rawVal === undefined) return false;
                     const cellStr = caseSensitive ? String(rawVal) : remove_accents(rawVal);
@@ -548,42 +626,37 @@ function renderTable() {
             });
         }
 
-        // 5. PIPELINE BƯỚC 2: SORTING (EFFECTIVE SORT = RUNTIME OVERRIDE || STYLE DEFAULT)
-        let effectiveSort = null;
-        if (runtimeState.sortOverride) {
-            const slot = runtimeState.sortOverride.slot;
-            if (slot >= 0 && slot < baseColumns.length) {
-                effectiveSort = {
-                    slot: slot,
-                    rawIndex: baseColumns[slot].rawIndex,
-                    direction: runtimeState.sortOverride.direction,
-                    type: baseColumns[slot].type
-                };
-            }
-        } else {
-            const defaultColVal = (styleConfig.defaultSortColumn && styleConfig.defaultSortColumn.value) || 'none';
-            if (defaultColVal && defaultColVal.startsWith('c')) {
-                const slot = parseInt(defaultColVal.substring(1), 10);
-                if (!isNaN(slot) && slot >= 0 && slot < baseColumns.length) {
-                    const dir = (styleConfig.defaultSortDirection && styleConfig.defaultSortDirection.value) || 'asc';
-                    effectiveSort = {
-                        slot: slot,
-                        rawIndex: baseColumns[slot].rawIndex,
-                        direction: dir,
-                        type: baseColumns[slot].type
-                    };
-                }
-            }
-        }
-
+        // 5. PIPELINE BƯỚC 2: SORTING (RUNTIME OVERRIDE HOẶC MULTI-LEVEL SETUP SORT TỐI ĐA 3 CẤP)
         let sortedRows = [...filteredRows];
-        if (effectiveSort) {
-            const dir = effectiveSort.direction === 'desc' ? -1 : 1;
+
+        if (runtimeState.sortOverride) {
+            // Header click override ưu tiên 1 cột
+            const overrideRawIdx = runtimeState.sortOverride.rawIndex;
+            const dir = runtimeState.sortOverride.direction === 'desc' ? -1 : 1;
+            const targetCol = tableColumns.find(c => c.rawIndex === overrideRawIdx);
+            const colType = targetCol ? targetCol.type : '';
+
             sortedRows.sort((rowA, rowB) => {
                 if (!rowA && !rowB) return 0;
                 if (!rowA) return 1;
                 if (!rowB) return -1;
-                return dir * compareValues(rowA[effectiveSort.rawIndex], rowB[effectiveSort.rawIndex], effectiveSort.type);
+                return dir * compareValues(rowA[overrideRawIdx], rowB[overrideRawIdx], colType);
+            });
+        } else if (setupSortLevels.length > 0) {
+            // Multi-level sort: Cấp 1 -> Cấp 2 -> Cấp 3
+            sortedRows.sort((rowA, rowB) => {
+                if (!rowA && !rowB) return 0;
+                if (!rowA) return 1;
+                if (!rowB) return -1;
+
+                for (const level of setupSortLevels) {
+                    const dir = level.direction === 'desc' ? -1 : 1;
+                    const res = compareValues(rowA[level.rawIndex], rowB[level.rawIndex], level.type);
+                    if (res !== 0) {
+                        return dir * res;
+                    }
+                }
+                return 0;
             });
         }
 
@@ -628,13 +701,8 @@ function renderTable() {
         if (showColPopup) {
             const btnColPopup = document.createElement('button');
             btnColPopup.className = 'btn-col-config';
-            btnColPopup.innerHTML = `<span>👁️ Cột hiển thị (${visibleColumns.length}/${baseColumns.length})</span>`;
-            
-            // Tooltip hiển thị mapping Column 1..N
-            const mappingTooltip = baseColumns.map((c, i) => `Column ${i + 1}: ${c.name}`).join(' | ');
-            btnColPopup.title = `Đối chiếu vị trí Style: ${mappingTooltip}`;
-            
-            btnColPopup.onclick = () => openRuntimeColumnsPopup(baseColumns);
+            btnColPopup.innerHTML = `<span>👁️ Cột hiển thị (${visibleColumns.length}/${tableColumns.length})</span>`;
+            btnColPopup.onclick = () => openRuntimeColumnsPopup(tableColumns);
             toolbarLeft.appendChild(btnColPopup);
         }
 
@@ -646,11 +714,17 @@ function renderTable() {
                 <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             `;
 
+            let autoPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) || 'Tìm kiếm...';
+            if (currentData.fields && currentData.fields.searchFields && currentData.fields.searchFields.length > 0) {
+                const searchNames = currentData.fields.searchFields.map(f => f.name || f.id);
+                autoPlaceholder = searchNames.length <= 3 ? `Tìm theo: ${searchNames.join(', ')}...` : `Tìm theo ${searchNames.length} cột đã chọn...`;
+            }
+
             const searchInput = document.createElement('input');
             searchInput.id = 'main-search-input';
             searchInput.className = 'search-input';
             searchInput.type = 'text';
-            searchInput.placeholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) || 'Tìm kiếm...';
+            searchInput.placeholder = autoPlaceholder;
             searchInput.value = runtimeState.searchText;
 
             searchInput.addEventListener('input', (e) => {
@@ -713,12 +787,27 @@ function renderTable() {
 
         visibleColumns.forEach((col) => {
             const th = document.createElement('th');
-            const isCurrentlySorted = effectiveSort && (effectiveSort.slot === col.slot);
-            if (isCurrentlySorted) th.className = 'th-sorted';
+            
+            // Kiểm tra trạng thái sort hiện tại
+            let isSorted = false;
+            let sortDir = 'asc';
+
+            if (runtimeState.sortOverride && runtimeState.sortOverride.rawIndex === col.rawIndex) {
+                isSorted = true;
+                sortDir = runtimeState.sortOverride.direction;
+            } else if (!runtimeState.sortOverride && setupSortLevels.length > 0) {
+                const matchedLevel = setupSortLevels.find(l => l.rawIndex === col.rawIndex);
+                if (matchedLevel) {
+                    isSorted = true;
+                    sortDir = matchedLevel.direction;
+                }
+            }
+
+            if (isSorted) th.className = 'th-sorted';
 
             let icon = '↕';
-            if (isCurrentlySorted) {
-                icon = effectiveSort.direction === 'asc' ? '▲' : '▼';
+            if (isSorted) {
+                icon = sortDir === 'asc' ? '▲' : '▼';
             }
 
             th.innerHTML = `
@@ -729,16 +818,16 @@ function renderTable() {
             `;
 
             if (allowHeaderSort) {
-                // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Style Default!
+                // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Setup Multi-Level Sort!
                 th.addEventListener('click', () => {
-                    if (runtimeState.sortOverride && runtimeState.sortOverride.slot === col.slot) {
+                    if (runtimeState.sortOverride && runtimeState.sortOverride.rawIndex === col.rawIndex) {
                         if (runtimeState.sortOverride.direction === 'asc') {
                             runtimeState.sortOverride.direction = 'desc';
                         } else {
                             runtimeState.sortOverride = null;
                         }
                     } else {
-                        runtimeState.sortOverride = { slot: col.slot, direction: 'asc' };
+                        runtimeState.sortOverride = { rawIndex: col.rawIndex, name: col.name, direction: 'asc' };
                     }
                     runtimeState.currentPage = 1;
                     renderTable();
@@ -779,7 +868,7 @@ function renderTable() {
 
                     if (textWrap) td.classList.add('text-wrap-cell');
 
-                    td.innerHTML = formatTableCell(col.key, rawVal, conditionalRules, col.type);
+                    td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type);
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
