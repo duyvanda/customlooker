@@ -6,7 +6,7 @@
             "elements": [
                 {
                     "id": "dimensions",
-                    "label": "Dimensions (Các cột chữ/ngày)",
+                    "label": "Dimensions (Các cột hiển thị)",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -15,11 +15,20 @@
                 },
                 {
                     "id": "metrics",
-                    "label": "Metrics (Các cột số liệu/doanh thu)",
+                    "label": "Metrics (Các cột số liệu)",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
                         "max": 20
+                    }
+                },
+                {
+                    "id": "searchFields",
+                    "label": "🔍 Cột Tìm kiếm nhanh (Kéo cột cần tìm vào đây)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 10
                     }
                 }
             ]
@@ -38,9 +47,9 @@
                 },
                 {
                     "id": "searchPlaceholder",
-                    "label": "Gợi ý tìm kiếm (Placeholder)",
+                    "label": "Gợi ý tìm kiếm tùy chỉnh (Để trống sẽ tự động)",
                     "type": "TEXTINPUT",
-                    "defaultValue": "Tìm mã, tên khách..."
+                    "defaultValue": ""
                 }
             ]
         }

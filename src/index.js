@@ -6,12 +6,12 @@ let firstRender = true;
 let currentData = null;
 
 let tableState = {
-    sortColumn: null,       // index cột đang sort (0-based)
+    sortColumn: null,       // index cột đang sort trong displayColumns (0-based)
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
     pageSize: 25,           // 10 | 25 | 50 | 100 | 250 | 500 | 1000 | -1 (Tất cả)
     searchQuery: '',
-    searchColumn: 'all'     // 'all' | index cột cụ thể (0, 1, 2...)
+    searchColumn: 'default' // 'default' (theo searchFields hoặc tất cả) | 'all' | index cụ thể
 };
 
 // HÀM HIỂN THỊ SKELETON LOADING
@@ -162,7 +162,7 @@ function formatCellContent(val) {
     if (lowerVal === 'pending' || lowerVal === 'chờ xử lý' || lowerVal === 'đang xử lý' || lowerVal === 'warning') {
         return `<span class="badge badge-warning">⏳ ${strVal}</span>`;
     }
-    if (lowerVal === 'staging' || lowerVal === 'info') {
+    if (lowerVal === 'staging' || lowerVal === 'info' || lowerVal === 'ch-replace') {
         return `<span class="badge badge-info">${strVal}</span>`;
     }
     if (lowerVal === 'none' || lowerVal === 'null' || lowerVal === 'n/a') {
@@ -185,52 +185,105 @@ function formatCellContent(val) {
 function renderTable() {
     if (!document.body || !currentData) return;
 
-    // Đọc cấu hình từ tab Style của Looker Studio (nếu có)
+    // Đọc cấu hình từ tab Style của Looker Studio
     const styleConfig = currentData.style || {};
     const showSearchConfig = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
-    const placeholderConfig = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) ? styleConfig.searchPlaceholder.value : 'Tìm mã, tên khách...';
 
-    // Trích xuất headers
-    const headers = [];
+    // Lấy thông tin fields và headers từ Looker Studio
     const fields = currentData.fields || {};
-    Object.keys(fields).forEach(conceptKey => {
-        const conceptFields = fields[conceptKey];
-        if (Array.isArray(conceptFields)) {
-            conceptFields.forEach(f => {
-                if (f && f.name) headers.push(f.name);
-            });
-        }
-    });
-
-    // Lấy toàn bộ rows từ data source (raw dataset)
+    const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // 1. FILTER THEO TÌM KIẾM (Hỗ trợ tìm theo cột cụ thể hoặc tất cả cột)
+    // Phân loại: Cột hiển thị (Display Columns) và Cột tìm kiếm (Search Target Columns)
+    const displayHeaders = [];
+    const displayColIndices = [];
+
+    // 1. Thêm Dimensions
+    if (fields.dimensions && Array.isArray(fields.dimensions)) {
+        fields.dimensions.forEach(f => {
+            const idx = allHeaders.findIndex(h => h.id === f.id || h.name === f.name);
+            if (idx !== -1 && !displayColIndices.includes(idx)) {
+                displayColIndices.push(idx);
+                displayHeaders.push(f.name);
+            }
+        });
+    }
+
+    // 2. Thêm Metrics
+    if (fields.metrics && Array.isArray(fields.metrics)) {
+        fields.metrics.forEach(f => {
+            const idx = allHeaders.findIndex(h => h.id === f.id || h.name === f.name);
+            if (idx !== -1 && !displayColIndices.includes(idx)) {
+                displayColIndices.push(idx);
+                displayHeaders.push(f.name);
+            }
+        });
+    }
+
+    // Fallback nếu không khớp concept
+    if (displayColIndices.length === 0 && allHeaders.length > 0) {
+        allHeaders.forEach((h, idx) => {
+            displayColIndices.push(idx);
+            displayHeaders.push(h.name);
+        });
+    }
+
+    // 3. Phân tích Cột tìm kiếm nhanh (searchFields được kéo vào Setup)
+    const designatedSearchIndices = [];
+    const designatedSearchNames = [];
+    if (fields.searchFields && Array.isArray(fields.searchFields) && fields.searchFields.length > 0) {
+        fields.searchFields.forEach(f => {
+            const idx = allHeaders.findIndex(h => h.id === f.id || h.name === f.name);
+            if (idx !== -1 && !designatedSearchIndices.includes(idx)) {
+                designatedSearchIndices.push(idx);
+                designatedSearchNames.push(f.name);
+            }
+        });
+    }
+
+    // Tự động tạo gợi ý tìm kiếm (Placeholder)
+    let autoPlaceholder = 'Tìm kiếm nhanh...';
+    if (designatedSearchNames.length > 0) {
+        autoPlaceholder = `Tìm theo: ${designatedSearchNames.join(', ')}...`;
+    }
+    const finalPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value && styleConfig.searchPlaceholder.value.trim() !== '')
+        ? styleConfig.searchPlaceholder.value
+        : autoPlaceholder;
+
+    // 1. FILTER THEO TÌM KIẾM
     let filteredRows = rawRows;
     if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
         const words = tableState.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        
+        // Xác định các cột cần quét tìm kiếm
+        let targetCols = [];
+        if (tableState.searchColumn === 'default') {
+            // Nếu có cột được kéo vào searchFields -> chỉ tìm trên các cột đó; nếu không -> tìm trên toàn bộ display columns
+            targetCols = designatedSearchIndices.length > 0 ? designatedSearchIndices : displayColIndices;
+        } else if (tableState.searchColumn === 'all') {
+            targetCols = displayColIndices;
+        } else {
+            const chosenIdx = Number(tableState.searchColumn);
+            targetCols = [chosenIdx];
+        }
+
         filteredRows = rawRows.filter(row => {
-            if (tableState.searchColumn === 'all') {
-                // Tất cả từ khóa phải tìm thấy ở đâu đó trong dòng
-                return words.every(word => {
-                    return row.some(cell => String(cell || '').toLowerCase().includes(word));
+            return words.every(word => {
+                return targetCols.some(colIdx => {
+                    const cellVal = row[colIdx];
+                    return String(cellVal || '').toLowerCase().includes(word);
                 });
-            } else {
-                // Tìm kiếm trong cột cụ thể được chọn
-                const colIdx = Number(tableState.searchColumn);
-                const cellText = String(row[colIdx] || '').toLowerCase();
-                return words.every(word => cellText.includes(word));
-            }
+            });
         });
     }
 
     // 2. SORT DỮ LIỆU
     let sortedRows = [...filteredRows];
-    if (tableState.sortColumn !== null && tableState.sortColumn >= 0 && tableState.sortColumn < headers.length) {
-        const colIdx = tableState.sortColumn;
+    if (tableState.sortColumn !== null && tableState.sortColumn >= 0 && tableState.sortColumn < displayColIndices.length) {
+        const actualColIdx = displayColIndices[tableState.sortColumn];
         const dir = tableState.sortDirection === 'desc' ? -1 : 1;
         sortedRows.sort((rowA, rowB) => {
-            return dir * compareValues(rowA[colIdx], rowB[colIdx]);
+            return dir * compareValues(rowA[actualColIdx], rowB[actualColIdx]);
         });
     }
 
@@ -239,7 +292,6 @@ function renderTable() {
     const pageSize = tableState.pageSize === -1 ? totalRows : tableState.pageSize;
     const totalPages = Math.max(1, Math.ceil(totalRows / (pageSize || 1)));
     
-    // Đảm bảo currentPage hợp lệ
     if (tableState.currentPage > totalPages) tableState.currentPage = totalPages;
     if (tableState.currentPage < 1) tableState.currentPage = 1;
 
@@ -253,7 +305,7 @@ function renderTable() {
     const wrapper = document.createElement('div');
     wrapper.className = 'table-wrapper';
 
-    // 1. TOOLBAR PHÍA TRÊN (Nút Export Excel + Ô Tìm Kiếm + Chọn số dòng/trang)
+    // 1. TOOLBAR PHÍA TRÊN
     const toolbar = document.createElement('div');
     toolbar.className = 'table-toolbar';
 
@@ -269,26 +321,37 @@ function renderTable() {
     `;
     toolbarLeft.appendChild(btnExcel);
 
-    // SEARCH GROUP (Search Input + Column Selector Dropdown)
+    // SEARCH GROUP
     if (showSearchConfig) {
         const searchGroup = document.createElement('div');
         searchGroup.className = 'search-group';
 
-        // Dropdown chọn cột tìm kiếm (Tất cả cột | Cột 1 | Cột 2...)
+        // Dropdown chọn cột tìm kiếm
         const colSelect = document.createElement('select');
         colSelect.className = 'search-column-select';
         
-        const allOpt = document.createElement('option');
-        allOpt.value = 'all';
-        allOpt.textContent = 'Tất cả cột';
-        if (tableState.searchColumn === 'all') allOpt.selected = true;
-        colSelect.appendChild(allOpt);
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = 'default';
+        defaultOpt.textContent = designatedSearchNames.length > 0 
+            ? `🔍 Cột đã gán (${designatedSearchNames.join(', ')})`
+            : 'Tất cả cột';
+        if (tableState.searchColumn === 'default') defaultOpt.selected = true;
+        colSelect.appendChild(defaultOpt);
 
-        headers.forEach((hName, idx) => {
+        if (designatedSearchNames.length > 0) {
+            const allOpt = document.createElement('option');
+            allOpt.value = 'all';
+            allOpt.textContent = 'Toàn bộ bảng';
+            if (tableState.searchColumn === 'all') allOpt.selected = true;
+            colSelect.appendChild(allOpt);
+        }
+
+        displayHeaders.forEach((hName, idx) => {
+            const actualIdx = displayColIndices[idx];
             const opt = document.createElement('option');
-            opt.value = idx;
+            opt.value = actualIdx;
             opt.textContent = hName;
-            if (String(tableState.searchColumn) === String(idx)) opt.selected = true;
+            if (String(tableState.searchColumn) === String(actualIdx)) opt.selected = true;
             colSelect.appendChild(opt);
         });
 
@@ -299,7 +362,7 @@ function renderTable() {
         });
         searchGroup.appendChild(colSelect);
 
-        // Input Box with Icon
+        // Input Box with SVG Icon
         const searchInputBox = document.createElement('div');
         searchInputBox.className = 'search-input-box';
         searchInputBox.innerHTML = `
@@ -309,7 +372,7 @@ function renderTable() {
         const searchInput = document.createElement('input');
         searchInput.className = 'search-input';
         searchInput.type = 'text';
-        searchInput.placeholder = placeholderConfig;
+        searchInput.placeholder = finalPlaceholder;
         searchInput.value = tableState.searchQuery;
         searchInput.addEventListener('input', (e) => {
             tableState.searchQuery = e.target.value;
@@ -332,7 +395,6 @@ function renderTable() {
     const pageSelect = document.createElement('select');
     pageSelect.className = 'page-size-select';
     
-    // Thêm các lựa chọn bao gồm 10, 25, 50, 100, 250, 500, 1000, Tất cả (-1)
     const sizeOptions = [10, 25, 50, 100, 250, 500, 1000, -1];
     sizeOptions.forEach(size => {
         const opt = document.createElement('option');
@@ -362,9 +424,9 @@ function renderTable() {
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
 
-    headers.forEach((hText, colIndex) => {
+    displayHeaders.forEach((hText, displayColIdx) => {
         const th = document.createElement('th');
-        const isSorted = tableState.sortColumn === colIndex;
+        const isSorted = tableState.sortColumn === displayColIdx;
         if (isSorted) th.className = 'th-sorted';
 
         let icon = '↕';
@@ -380,10 +442,10 @@ function renderTable() {
         `;
 
         th.addEventListener('click', () => {
-            if (tableState.sortColumn === colIndex) {
+            if (tableState.sortColumn === displayColIdx) {
                 tableState.sortDirection = tableState.sortDirection === 'asc' ? 'desc' : 'asc';
             } else {
-                tableState.sortColumn = colIndex;
+                tableState.sortColumn = displayColIdx;
                 tableState.sortDirection = 'asc';
             }
             renderTable();
@@ -399,9 +461,9 @@ function renderTable() {
     if (pageRows.length > 0) {
         pageRows.forEach(row => {
             const tr = document.createElement('tr');
-            headers.forEach((_, colIndex) => {
+            displayColIndices.forEach((actualColIdx) => {
                 const td = document.createElement('td');
-                const cellVal = row[colIndex];
+                const cellVal = row[actualColIdx];
                 
                 // Căn lề phải cho cột số
                 if (!isNaN(cellVal) && cellVal !== null && cellVal !== '' && typeof cellVal !== 'boolean' && !isValidDate(String(cellVal))) {
@@ -416,7 +478,7 @@ function renderTable() {
     } else {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = headers.length || 1;
+        td.colSpan = displayHeaders.length || 1;
         td.style.textAlign = 'center';
         td.style.padding = '40px 20px';
         td.style.color = '#94a3b8';
@@ -527,7 +589,7 @@ function renderTable() {
 
     document.body.appendChild(wrapper);
 
-    // SỰ KIỆN XUẤT FILE EXCEL: XUẤT TOÀN BỘ DATASET ĐÃ LỌC
+    // SỰ KIỆN XUẤT FILE EXCEL: XUẤT TOÀN BỘ CỘT HIỂN THỊ CỦA DATASET
     btnExcel.addEventListener('click', () => {
         try {
             if (!rawRows || rawRows.length === 0) {
@@ -535,28 +597,18 @@ function renderTable() {
                 return;
             }
 
-            if (headers.length === 0) {
+            if (displayHeaders.length === 0) {
                 alert('Chưa có cột nào được chọn!');
                 return;
             }
 
             const rowsToExport = sortedRows.length > 0 ? sortedRows : rawRows;
 
-            const excelData = rowsToExport.map(row => {
-                let rowObject = {};
-                headers.forEach((headerName, index) => {
-                    const cellValue = row[index];
-                    if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') {
-                        rowObject[headerName] = '';
-                    } else if (!isNaN(cellValue) && String(cellValue).trim() !== '' && typeof cellValue !== 'boolean') {
-                        rowObject[headerName] = Number(cellValue);
-                    } else if (isValidDate(String(cellValue))) {
-                        rowObject[headerName] = String(cellValue);
-                    } else {
-                        rowObject[headerName] = String(cellValue);
-                    }
+            const excelRows = rowsToExport.map(row => {
+                return displayColIndices.map(colIdx => {
+                    const cellVal = row[colIdx];
+                    return (cellVal === null || cellVal === undefined) ? '' : cellVal;
                 });
-                return rowObject;
             });
 
             const todayStr = new Date().toISOString().slice(0, 10);
@@ -564,9 +616,8 @@ function renderTable() {
 
             downloadViaHelper({
                 type: 'EXCEL_DOWNLOAD',
-                headers: headers,
-                rows: rowsToExport,
-                excelData: excelData,
+                headers: displayHeaders,
+                rows: excelRows,
                 fileName: fileName
             });
 
