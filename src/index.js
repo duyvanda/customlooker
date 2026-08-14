@@ -1,16 +1,19 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình cột và quy tắc màu trên Storage Bridge & Local Storage
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v7';
-const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v7';
+// Khóa lưu trữ cấu hình cột và quy tắc màu trên Storage Bridge & Local Cache
+const USER_CONFIG_STORAGE_KEY = 'excelviz_v8_columns';
+const USER_RULES_STORAGE_KEY = 'excelviz_v8_rules';
 const STORAGE_BRIDGE_URL = 'https://storage.googleapis.com/analytics_merap/excelchart2/storage_bridge.html';
 
 // Biến trạng thái toàn cục
-let firstRender = true;
 let currentData = null;
-let userColumnConfigs = null; // Cấu hình cột tùy biến
+let userColumnConfigs = null; // Cấu hình cột đã đồng bộ
 let userConditionalRules = null; // Quy tắc tô màu động từ Modal
+
+// Bộ đệm giải quyết Race Condition khi F5 (Bridge trả dữ liệu trước khi Looker gửi data)
+let pendingColumnConfigs = null;
+let pendingRules = null;
 
 let tableState = {
     sortColumn: null,       // index trong activeColumns đang sort (0-based) hoặc null
@@ -21,8 +24,20 @@ let tableState = {
     searchQuery: ''
 };
 
+// HÀM TẠO VÀ LẤY APP ROOT (TÁCH BIỆT KHỎI DOCUMENT.BODY ĐỂ KHÔNG BAO GIỜ XÓA NHẦM STORAGE BRIDGE)
+function getAppRoot() {
+    let root = document.getElementById('excelviz-app-root');
+    if (!root) {
+        root = document.createElement('div');
+        root.id = 'excelviz-app-root';
+        if (document.body) {
+            document.body.appendChild(root);
+        }
+    }
+    return root;
+}
+
 // STORAGE BRIDGE: LƯU TRỮ VĨNH VIỄN TRÊN DOMAIN CỐ ĐỊNH (storage.googleapis.com)
-// Khắc phục 100% việc Looker Studio thay đổi subdomain sandbox googleusercontent.com sau mỗi lần F5!
 let bridgeIframe = null;
 let isBridgeReady = false;
 const pendingBridgeMessages = [];
@@ -58,7 +73,7 @@ function initStorageBridge() {
         window.addEventListener('message', (e) => {
             try {
                 if (!e.data || typeof e.data !== 'object') return;
-                
+
                 if (e.data.action === 'BRIDGE_READY') {
                     isBridgeReady = true;
                     while (pendingBridgeMessages.length > 0) {
@@ -69,16 +84,21 @@ function initStorageBridge() {
                 } else if (e.data.action === 'CONFIG_LOADED') {
                     if (e.data.key === USER_CONFIG_STORAGE_KEY && e.data.value) {
                         if (Array.isArray(e.data.value) && e.data.value.length > 0) {
-                            const displayFields = extractDisplayFields(currentData);
-                            userColumnConfigs = syncColumnConfigsWithFields(e.data.value, displayFields);
-                            saveToLocalCache(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
-                            renderTable();
+                            if (currentData) {
+                                const displayFields = extractDisplayFields(currentData);
+                                userColumnConfigs = syncColumnConfigsWithFields(e.data.value, displayFields);
+                                saveToLocalCache(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
+                                renderTable();
+                            } else {
+                                pendingColumnConfigs = e.data.value;
+                            }
                         }
                     } else if (e.data.key === USER_RULES_STORAGE_KEY && e.data.value) {
                         if (Array.isArray(e.data.value)) {
                             userConditionalRules = e.data.value;
                             saveToLocalCache(USER_RULES_STORAGE_KEY, userConditionalRules);
-                            renderTable();
+                            if (currentData) renderTable();
+                            else pendingRules = e.data.value;
                         }
                     }
                 }
@@ -87,24 +107,26 @@ function initStorageBridge() {
             }
         });
 
-        if (document.body) {
-            document.body.appendChild(bridgeIframe);
+        const mountBridge = () => {
+            if (document.body && !document.getElementById('excelviz-storage-bridge')) {
+                document.body.appendChild(bridgeIframe);
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', mountBridge, { once: true });
         } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                if (document.body && !document.getElementById('excelviz-storage-bridge')) {
-                    document.body.appendChild(bridgeIframe);
-                }
-            });
+            mountBridge();
         }
     } catch (e) {
         console.warn('[ExcelViz] initStorageBridge error:', e);
     }
 }
 
-// BẬT STORAGE BRIDGE NGAY KHI CODE LOAD
+// KHỞI ĐỘNG STORAGE BRIDGE NGAY KHI LOAD
 initStorageBridge();
 
-// HỆ THỐNG LƯU TRỮ ĐA TẦNG (LOCAL CACHE + PERMANENT CLOUD BRIDGE)
+// HỆ THỐNG LƯU TRỮ ĐA TẦNG (LOCAL CACHE + STORAGE BRIDGE)
 function saveToLocalCache(key, data) {
     if (!data) return;
     const str = JSON.stringify(data);
@@ -162,15 +184,11 @@ function removeFromStorage(key) {
 
 // HỖ TRỢ KÍCH HOẠT FOCUS / CHỌN CHART KHI NHẤP CHUỘT Ở EDIT MODE
 try {
-    window.addEventListener('click', () => {
-        try { window.focus(); } catch (e) { }
-    });
-    window.addEventListener('mousedown', () => {
-        try { window.focus(); } catch (e) { }
-    });
+    window.addEventListener('click', () => { try { window.focus(); } catch (e) { } });
+    window.addEventListener('mousedown', () => { try { window.focus(); } catch (e) { } });
 } catch (e) { }
 
-// HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT (AN TOÀN TUYỆT ĐỐI VỚI MỌI KIỂU DỮ LIỆU)
+// HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT
 function remove_accents(str) {
     if (str === null || str === undefined) return '';
     try {
@@ -185,80 +203,7 @@ function remove_accents(str) {
     }
 }
 
-// HÀM HIỂN THỊ SKELETON LOADING
-function showSkeleton() {
-    try {
-        if (!document.body) return;
-
-        if (!document.getElementById('excelviz-skeleton-style')) {
-            const style = document.createElement('style');
-            style.id = 'excelviz-skeleton-style';
-            style.textContent = `
-                @keyframes shimmer {
-                    0% { background-position: -200% 0; }
-                    100% { background-position: 200% 0; }
-                }
-                .skeleton {
-                    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-                    background-size: 200% 100%;
-                    animation: shimmer 1.4s ease-in-out infinite;
-                    border-radius: 6px;
-                }
-                .skeleton-container {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
-                    padding: 12px;
-                    box-sizing: border-box;
-                    width: 100%;
-                }
-                .skeleton-btn {
-                    width: 200px;
-                    height: 32px;
-                }
-                .skeleton-table {
-                    width: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 8px;
-                }
-                .skeleton-header {
-                    height: 36px;
-                    opacity: 0.9;
-                }
-                .skeleton-row {
-                    height: 30px;
-                    opacity: 0.65;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-
-        document.body.innerHTML = `
-            <div class="skeleton-container">
-                <div class="skeleton skeleton-btn"></div>
-                <div class="skeleton-table">
-                    <div class="skeleton skeleton-header"></div>
-                    <div class="skeleton skeleton-row"></div>
-                    <div class="skeleton skeleton-row"></div>
-                    <div class="skeleton skeleton-row"></div>
-                    <div class="skeleton skeleton-row"></div>
-                    <div class="skeleton skeleton-row"></div>
-                </div>
-            </div>
-        `;
-    } catch (e) {
-        console.warn('[ExcelViz] Skeleton warning:', e);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', showSkeleton, { once: true });
-} else {
-    showSkeleton();
-}
-
-// HÀM KIỂM TRA CHÍNH XÁC ĐỊNH DẠNG NGÀY THÁNG
+// HÀM KIỂM TRA ĐỊNH DẠNG NGÀY THÁNG
 function isDateValue(val, fieldType = '') {
     if (val === null || val === undefined) return false;
     const str = String(val).trim();
@@ -269,22 +214,14 @@ function isDateValue(val, fieldType = '') {
         return true;
     }
 
-    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(str)) {
-        return true;
-    }
-
-    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/.test(str)) {
-        return true;
-    }
-
-    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str) || /^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(str)) {
-        return true;
-    }
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(str)) return true;
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/.test(str)) return true;
+    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str) || /^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(str)) return true;
 
     return false;
 }
 
-// HÀM KIỂM TRA CHÍNH XÁC SỐ THỰC SỰ
+// HÀM KIỂM TRA SỐ THỰC
 function isNumericValue(val, fieldType = '') {
     if (val === null || val === undefined) return false;
     if (typeof val === 'boolean') return false;
@@ -296,10 +233,7 @@ function isNumericValue(val, fieldType = '') {
 
     const s = String(val).trim();
     if (s === '') return false;
-
-    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s)) {
-        return false;
-    }
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(s)) return false;
 
     if (typeof val === 'number') return !isNaN(val);
     if (typeof val !== 'string') return false;
@@ -336,12 +270,11 @@ function downloadViaHelper(payload) {
     }
 }
 
-// HÀM ĐỊNH DẠNG NGÀY THÁNG ĐA DẠNG (Chuẩn hóa YYYYMMDD -> dd-mm-yyyy)
+// HÀM ĐỊNH DẠNG NGÀY THÁNG ĐA DẠNG
 function formatDateValue(val, fmtStyle = 'date') {
     if (val === null || val === undefined || val === '') return '';
     const str = String(val).trim();
 
-    // 1. Chuỗi YYYYMMDD 8 chữ số Looker Studio
     const match8 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/);
     if (match8) {
         const yyyy = match8[1];
@@ -354,7 +287,6 @@ function formatDateValue(val, fmtStyle = 'date') {
         return `${dd}-${mm}-${yyyy}`;
     }
 
-    // 2. Chuỗi YYYYMMDDHHMMSS 14 chữ số
     const match14 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/);
     if (match14) {
         const yyyy = match14[1];
@@ -368,7 +300,6 @@ function formatDateValue(val, fmtStyle = 'date') {
         return `${dd}-${mm}-${yyyy}`;
     }
 
-    // 3. Chuỗi YYYY-MM-DD hoặc YYYY/MM/DD
     const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
     if (match) {
         const yyyy = match[1];
@@ -385,7 +316,6 @@ function formatDateValue(val, fmtStyle = 'date') {
         return `${dd}-${mm}-${yyyy}`;
     }
 
-    // 4. Chuỗi DD-MM-YYYY hoặc DD/MM/YYYY
     const matchDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
     if (matchDMY) {
         const dd = matchDMY[1].padStart(2, '0');
@@ -436,9 +366,7 @@ function evaluateAllRules(fieldName, val, allRules) {
             else if (rule.operator === '==' || rule.operator === 'equals') matched = num === targetNum;
         }
 
-        if (matched) {
-            return rule.style;
-        }
+        if (matched) return rule.style;
     }
 
     return null;
@@ -483,7 +411,6 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
             if (Math.abs(num) < 1 && num !== 0) formattedVal = (num * 100).toFixed(1).replace(/\.0$/, '') + '%';
             else formattedVal = num.toFixed(1).replace(/\.0$/, '') + '%';
         } else {
-            // Tự động: Giữ tối đa 4 số thập phân nếu là số lẻ
             formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
         }
     }
@@ -522,19 +449,16 @@ function compareValues(a, b, fieldType = '') {
     const strA = String(a).trim();
     const strB = String(b).trim();
 
-    // 1. So sánh ngày tháng
     if (isDateValue(a, fieldType) && isDateValue(b, fieldType)) {
         return strA.localeCompare(strB);
     }
 
-    // 2. So sánh số thực
     const isNumA = isNumericValue(a, fieldType);
     const isNumB = isNumericValue(b, fieldType);
     if (isNumA && isNumB) {
         return Number(a) - Number(b);
     }
 
-    // 3. So sánh chuỗi tiếng Việt tự nhiên
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
 }
 
@@ -594,7 +518,7 @@ function extractDisplayFields(currentData) {
     return displayFields;
 }
 
-// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (GIỮ NGUYÊN TẤT CẢ TRẠNG THÁI ẨN/HIỆN, TÌM KIẾM, FORMAT, SORT ĐÃ LƯU)
+// HÀM ĐỒNG BỘ CẤU HÌNH CỘT (STABLE COLUMN IDENTITY BẢO TOÀN DỮ LIỆU)
 function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     if (!displayFields || !Array.isArray(displayFields) || displayFields.length === 0) {
         return [];
@@ -628,8 +552,8 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 ...ec,
                 field: matchedDf.name,
                 title: (ec.title && ec.title !== ec.field) ? ec.title : matchedDf.name,
-                visible: ec.visible !== false, // Giữ nguyên trạng thái checkbox Hiện/Ẩn
-                searchable: ec.searchable === true, // Giữ nguyên trạng thái checkbox Tìm kiếm
+                visible: ec.visible !== false, // Bảo toàn trạng thái Ẩn/Hiện
+                searchable: ec.searchable === true, // Bảo toàn trạng thái Tìm kiếm
                 sort: ec.sort || 'none',
                 format: ec.format || 'auto',
                 type: matchedDf.type || ec.type || '',
@@ -646,7 +570,7 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
                 field: df.name || df.id || `col_${idx}`,
                 title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
-                searchable: false, // Cột mới mặc định uncheck
+                searchable: false,
                 format: 'auto',
                 sort: 'none',
                 type: df.type || '',
@@ -658,19 +582,19 @@ function syncColumnConfigsWithFields(existingConfigs, displayFields) {
     return result;
 }
 
-// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU TỪ LOCAL CACHE
+// HÀM LẤY CẤU HÌNH CỘT ĐÃ LƯU
 function loadStoredColumnConfigs(displayFields) {
-    const saved = loadFromLocalCache(USER_CONFIG_STORAGE_KEY);
+    const saved = pendingColumnConfigs || loadFromLocalCache(USER_CONFIG_STORAGE_KEY);
     return syncColumnConfigsWithFields(saved, displayFields);
 }
 
-// HÀM LẤY QUY TẮC MÀU TỪ LOCAL CACHE
+// HÀM LẤY QUY TẮC MÀU
 function loadStoredRules() {
-    const saved = loadFromLocalCache(USER_RULES_STORAGE_KEY);
+    const saved = pendingRules || loadFromLocalCache(USER_RULES_STORAGE_KEY);
     return Array.isArray(saved) ? saved : [];
 }
 
-// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM CHỌN CỘT TÌM KIẾM, SẮP XẾP & PHÂN TRANG 10 CỘT)
+// HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG (KÈM PHÂN TRANG 10 CỘT)
 function openColumnConfigModal() {
     try {
         if (!currentData) return;
@@ -906,7 +830,6 @@ function openColumnConfigModal() {
             }
 
             if (activeTab === 'columns') {
-                // Sự kiện phân trang trong Modal
                 const prevPageBtn = overlay.querySelector('#modal-prev-page');
                 if (prevPageBtn) {
                     prevPageBtn.onclick = () => {
@@ -937,7 +860,6 @@ function openColumnConfigModal() {
                     };
                 });
 
-                // Di chuyển cột lên/xuống
                 overlay.querySelectorAll('.btn-move-up').forEach(btn => {
                     btn.onclick = (e) => {
                         syncInputsBeforeMove();
@@ -1005,6 +927,8 @@ function openColumnConfigModal() {
                 removeFromStorage(USER_RULES_STORAGE_KEY);
                 userColumnConfigs = null;
                 userConditionalRules = [];
+                pendingColumnConfigs = null;
+                pendingRules = null;
                 tableState.sortColumn = null;
                 overlay.remove();
                 renderTable();
@@ -1016,14 +940,12 @@ function openColumnConfigModal() {
                 userColumnConfigs = workingConfigs;
                 userConditionalRules = workingRules;
                 
-                // Đồng bộ sort từ modal sang tableState nếu có cột được chỉ định sort
                 const configSortIdx = userColumnConfigs.findIndex(c => c && c.visible !== false && c.sort && c.sort !== 'none');
                 if (configSortIdx !== -1) {
                     tableState.sortColumn = configSortIdx;
                     tableState.sortDirection = userColumnConfigs[configSortIdx].sort;
                 }
 
-                // Lưu vào hệ thống lưu trữ vĩnh viễn (Local Cache + Storage Bridge)
                 saveToStorage(USER_CONFIG_STORAGE_KEY, userColumnConfigs);
                 saveToStorage(USER_RULES_STORAGE_KEY, userConditionalRules);
 
@@ -1039,10 +961,12 @@ function openColumnConfigModal() {
     }
 }
 
-// HÀM RENDER BẢNG CHÍNH VỚI FULL TÍNH NĂNG & DEFENSIVE HANDLING
+// HÀM RENDER BẢNG CHÍNH VÀO #EXCELVIZ-APP-ROOT (TUYỆT ĐỐI KHÔNG XÓA DOCUMENT.BODY)
 function renderTable() {
     try {
-        if (!document.body || !currentData) return;
+        if (!currentData) return;
+        const appRoot = getAppRoot();
+        if (!appRoot) return;
 
         // Lưu lại trạng thái focus của ô search
         const prevSearchInput = document.getElementById('main-search-input');
@@ -1112,7 +1036,7 @@ function renderTable() {
             ? styleConfig.searchPlaceholder.value
             : autoPlaceholder;
 
-        // 1. FILTER TÌM KIẾM BỎ DẤU TIẾNG VIỆT (remove_accents) TRÊN CÁC CỘT ĐƯỢC CHỌN
+        // 1. FILTER TÌM KIẾM BỎ DẤU TIẾNG VIỆT
         let filteredRows = rawRows;
         if (tableState.searchQuery && tableState.searchQuery.trim() !== '') {
             const words = remove_accents(tableState.searchQuery.trim()).split(/\s+/).filter(Boolean);
@@ -1130,7 +1054,6 @@ function renderTable() {
         }
 
         // 2. SORT DỮ LIỆU
-        // Nếu chưa bấm sort trên header, kiểm tra xem trong cấu hình cột có đặt sort mặc định không
         let activeSortColIdx = tableState.sortColumn;
         let activeSortDir = tableState.sortDirection;
 
@@ -1167,8 +1090,8 @@ function renderTable() {
         const endIdx = tableState.pageSize === -1 ? totalRows : Math.min(startIdx + pageSize, totalRows);
         const pageRows = sortedRows.slice(startIdx, endIdx);
 
-        // DỰNG GIAO DIỆN HTML
-        document.body.innerHTML = '';
+        // DỰNG GIAO DIỆN HTML VÀO #EXCELVIZ-APP-ROOT
+        appRoot.innerHTML = '';
 
         const wrapper = document.createElement('div');
         wrapper.className = 'table-wrapper';
@@ -1288,13 +1211,11 @@ function renderTable() {
                 </div>
             `;
 
-            // 3-state sorting trên header: Asc -> Desc -> Reset
             th.addEventListener('click', () => {
                 if (tableState.sortColumn === colIdx) {
                     if (tableState.sortDirection === 'asc') {
                         tableState.sortDirection = 'desc';
                     } else {
-                        // Click lần 3: Khôi phục sort mặc định
                         tableState.sortColumn = null;
                         tableState.sortDirection = 'asc';
                     }
@@ -1457,7 +1378,7 @@ function renderTable() {
         paginationFooter.appendChild(paginationControls);
         wrapper.appendChild(paginationFooter);
 
-        document.body.appendChild(wrapper);
+        appRoot.appendChild(wrapper);
 
         // KHÔI PHỤC FOCUS Ô SEARCH
         if (wasFocused) {
@@ -1528,9 +1449,20 @@ function renderTable() {
 // HÀM NHẬN DỮ LIỆU TỪ LOOKER STUDIO
 function drawVisualization(data) {
     try {
-        if (!document.body) return;
-
         currentData = data;
+
+        // Nếu bridge đã trả config từ trước đó thì đồng bộ ngay
+        if (pendingColumnConfigs) {
+            const displayFields = extractDisplayFields(currentData);
+            userColumnConfigs = syncColumnConfigsWithFields(pendingColumnConfigs, displayFields);
+            pendingColumnConfigs = null;
+        }
+
+        if (pendingRules) {
+            userConditionalRules = pendingRules;
+            pendingRules = null;
+        }
+
         renderTable();
 
     } catch (err) {
