@@ -249,15 +249,18 @@ function extractActiveFilterInfo(currentData, activeRows, runtimeState) {
         filterInfo.searchKeyword = runtimeState.searchText.trim();
     }
 
-    // 3. Danh sách giá trị của các Dimension đang được hiển thị / lọc
+    // 3. Chỉ lấy các Dimension được chỉ định làm trường lọc (Ưu tiên từ Search Dimension trong Setup)
     const fields = currentData ? (currentData.fields || {}) : {};
-    const dims = Array.isArray(fields.dimensions) ? fields.dimensions : [];
+    const targetFilterFields = (Array.isArray(fields.searchFields) && fields.searchFields.length > 0)
+        ? fields.searchFields
+        : (Array.isArray(fields.dimensions) ? fields.dimensions.slice(0, 1) : []);
+
     const allHeaders = (currentData && currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
         ? currentData.tables.DEFAULT.headers
         : [];
 
     const dimensionValues = {};
-    dims.forEach(dim => {
+    targetFilterFields.forEach(dim => {
         if (!dim) return;
         const rawIdx = findRawIndexForField(dim, allHeaders);
         if (rawIdx !== -1) {
