@@ -326,20 +326,20 @@ function extractSetupSortConfig(currentData, styleConfig) {
     return sortLevels;
 }
 
-// HÀM TRÍCH XUẤT QUY TẮC TÔ MÀU / BADGE TỪ SETUP & STYLE (RULES 1–5)
+// HÀM TRÍCH XUẤT QUY TẮC TÔ MÀU / BADGE TỪ SETUP & STYLE (RULES 1–3)
 function extractSetupConditionalRules(currentData, styleConfig) {
     if (!currentData) return [];
     const fields = currentData.fields || {};
     const condDims = Array.isArray(fields.conditionalFields) ? fields.conditionalFields : [];
     const condMets = Array.isArray(fields.conditionalMetricFields) ? fields.conditionalMetricFields : [];
-    const allSetupCond = [...condDims, ...condMets].slice(0, 5);
+    const allSetupCond = [...condDims, ...condMets].slice(0, 3);
 
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
         ? currentData.tables.DEFAULT.headers
         : [];
 
     const rules = [];
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 3; i++) {
         const enabled = styleConfig[`rule${i}_enable`] && styleConfig[`rule${i}_enable`].value === true;
         if (!enabled) continue;
 

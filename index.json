@@ -69,20 +69,20 @@
                 },
                 {
                     "id": "conditionalFields",
-                    "label": "🎨 Cột Dimension tô màu (Rules 1–5)",
+                    "label": "🎨 Cột Dimension tô màu (Rules 1–3)",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 5
+                        "max": 3
                     }
                 },
                 {
                     "id": "conditionalMetricFields",
-                    "label": "🎨 Cột Metric tô màu (Rules 1–5)",
+                    "label": "🎨 Cột Metric tô màu (Rules 1–3)",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
-                        "max": 5
+                        "max": 3
                     }
                 }
             ]
@@ -426,134 +426,6 @@
                     "label": "Kiểu hiển thị",
                     "type": "SELECT_SINGLE",
                     "defaultValue": "badge_warning",
-                    "options": [
-                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
-                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
-                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
-                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
-                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
-                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
-                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
-                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
-                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
-                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
-                    ]
-                }
-            ]
-        },
-        {
-            "id": "rule4Section",
-            "label": "🎨 Tô Màu & Badge — Quy Tắc 4",
-            "elements": [
-                {
-                    "id": "rule4_enable",
-                    "label": "Bật Quy Tắc 4",
-                    "type": "CHECKBOX",
-                    "defaultValue": false
-                },
-                {
-                    "id": "rule4_operator",
-                    "label": "Điều kiện so sánh",
-                    "type": "SELECT_SINGLE",
-                    "defaultValue": "contains",
-                    "options": [
-                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
-                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
-                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
-                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
-                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
-                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
-                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
-                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
-                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
-                        { "label": "Trong khoảng (Between)", "value": "between" },
-                        { "label": "Số dương (>= 0)", "value": "pos" },
-                        { "label": "Số âm (< 0)", "value": "neg" },
-                        { "label": "Ô rỗng (Empty)", "value": "empty" },
-                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
-                    ]
-                },
-                {
-                    "id": "rule4_value",
-                    "label": "Giá trị so sánh",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
-                },
-                {
-                    "id": "rule4_value2",
-                    "label": "Giá trị thứ hai (Dành cho Between)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
-                },
-                {
-                    "id": "rule4_style",
-                    "label": "Kiểu hiển thị",
-                    "type": "SELECT_SINGLE",
-                    "defaultValue": "color_green",
-                    "options": [
-                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
-                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
-                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
-                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
-                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
-                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
-                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
-                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
-                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
-                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
-                    ]
-                }
-            ]
-        },
-        {
-            "id": "rule5Section",
-            "label": "🎨 Tô Màu & Badge — Quy Tắc 5",
-            "elements": [
-                {
-                    "id": "rule5_enable",
-                    "label": "Bật Quy Tắc 5",
-                    "type": "CHECKBOX",
-                    "defaultValue": false
-                },
-                {
-                    "id": "rule5_operator",
-                    "label": "Điều kiện so sánh",
-                    "type": "SELECT_SINGLE",
-                    "defaultValue": "contains",
-                    "options": [
-                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
-                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
-                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
-                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
-                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
-                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
-                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
-                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
-                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
-                        { "label": "Trong khoảng (Between)", "value": "between" },
-                        { "label": "Số dương (>= 0)", "value": "pos" },
-                        { "label": "Số âm (< 0)", "value": "neg" },
-                        { "label": "Ô rỗng (Empty)", "value": "empty" },
-                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
-                    ]
-                },
-                {
-                    "id": "rule5_value",
-                    "label": "Giá trị so sánh",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
-                },
-                {
-                    "id": "rule5_value2",
-                    "label": "Giá trị thứ hai (Dành cho Between)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
-                },
-                {
-                    "id": "rule5_style",
-                    "label": "Kiểu hiển thị",
-                    "type": "SELECT_SINGLE",
-                    "defaultValue": "color_red",
                     "options": [
                         { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
                         { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
