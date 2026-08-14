@@ -247,8 +247,59 @@ function compareValues(a, b) {
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(String(a), String(b));
 }
 
-// HÀM KHỞI TẠO VÀ LẤY DANH SÁCH CỘT ĐÃ CẤU HÌNH
-function getMergedColumnConfigs(rawHeaders) {
+// HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ (LOẠI TRỪ CỘT SEARCHFIELDS)
+function extractDisplayFields(currentData) {
+    const fields = currentData.fields || {};
+    const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
+    const displayFields = [];
+
+    // 1. Lấy từ Dimensions
+    if (fields.dimensions && Array.isArray(fields.dimensions)) {
+        fields.dimensions.forEach(f => {
+            const rawIdx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
+            if (rawIdx !== -1 && !displayFields.some(df => df.rawIndex === rawIdx)) {
+                displayFields.push({
+                    id: f.id || `dim_${rawIdx}`,
+                    name: f.name || f.id,
+                    rawIndex: rawIdx
+                });
+            }
+        });
+    }
+
+    // 2. Lấy từ Metrics
+    if (fields.metrics && Array.isArray(fields.metrics)) {
+        fields.metrics.forEach(f => {
+            const rawIdx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
+            if (rawIdx !== -1 && !displayFields.some(df => df.rawIndex === rawIdx)) {
+                displayFields.push({
+                    id: f.id || `met_${rawIdx}`,
+                    name: f.name || f.id,
+                    rawIndex: rawIdx
+                });
+            }
+        });
+    }
+
+    // Fallback: nếu không có phân loại dimensions/metrics thì lấy allHeaders loại trừ searchFields
+    if (displayFields.length === 0 && allHeaders.length > 0) {
+        const searchFieldIds = (fields.searchFields || []).map(sf => sf.id || sf.name);
+        allHeaders.forEach((h, idx) => {
+            if (!searchFieldIds.includes(h.id) && !searchFieldIds.includes(h.name)) {
+                displayFields.push({
+                    id: h.id || `col_${idx}`,
+                    name: h.name || h.id,
+                    rawIndex: idx
+                });
+            }
+        });
+    }
+
+    return displayFields;
+}
+
+// HÀM KHỞI TẠO VÀ LẤY DANH SÁCH CỘT ĐÃ CẤU HÌNH (CHỈ CHO CỘT HIỂN THỊ)
+function getMergedColumnConfigs(displayFields) {
     let savedConfigs = null;
     try {
         const stored = localStorage.getItem(USER_CONFIG_STORAGE_KEY);
@@ -259,41 +310,41 @@ function getMergedColumnConfigs(rawHeaders) {
 
     // Nếu chưa có lưu thì tạo mặc định
     if (!savedConfigs || !Array.isArray(savedConfigs)) {
-        return rawHeaders.map((h, idx) => ({
-            id: h.id || `col_${idx}`,
-            field: h.name || h.id || `col_${idx}`,
-            title: h.name || h.id || `Cột ${idx + 1}`,
+        return displayFields.map((df, idx) => ({
+            id: df.id || `col_${idx}`,
+            field: df.name || df.id || `col_${idx}`,
+            title: df.name || df.id || `Cột ${idx + 1}`,
             visible: true,
             format: 'auto',
             color: 'default',
-            rawIndex: idx
+            rawIndex: df.rawIndex
         }));
     }
 
     // Ghép giữa schema hiện tại và savedConfigs
     const result = [];
     savedConfigs.forEach(sc => {
-        const matchedRawIdx = rawHeaders.findIndex(h => (h.id && h.id === sc.id) || h.name === sc.field);
-        if (matchedRawIdx !== -1) {
+        const matchedDf = displayFields.find(df => (df.id && df.id === sc.id) || df.name === sc.field);
+        if (matchedDf) {
             result.push({
                 ...sc,
-                rawIndex: matchedRawIdx
+                rawIndex: matchedDf.rawIndex
             });
         }
     });
 
     // Bổ sung các cột mới xuất hiện mà chưa có trong config cũ
-    rawHeaders.forEach((h, idx) => {
-        const exists = result.some(r => r.rawIndex === idx);
+    displayFields.forEach((df, idx) => {
+        const exists = result.some(r => r.rawIndex === df.rawIndex);
         if (!exists) {
             result.push({
-                id: h.id || `col_${idx}`,
-                field: h.name || h.id || `col_${idx}`,
-                title: h.name || h.id || `Cột ${idx + 1}`,
+                id: df.id || `col_${idx}`,
+                field: df.name || df.id || `col_${idx}`,
+                title: df.name || df.id || `Cột ${idx + 1}`,
                 visible: true,
                 format: 'auto',
                 color: 'default',
-                rawIndex: idx
+                rawIndex: df.rawIndex
             });
         }
     });
@@ -303,13 +354,14 @@ function getMergedColumnConfigs(rawHeaders) {
 
 // HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG (TABLE COLUMN MODAL)
 function openColumnConfigModal() {
-    const rawHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
-    if (!rawHeaders || rawHeaders.length === 0) {
-        alert('Chưa có dữ liệu cột để cấu hình!');
+    if (!currentData) return;
+    const displayFields = extractDisplayFields(currentData);
+    if (!displayFields || displayFields.length === 0) {
+        alert('Chưa có dữ liệu cột hiển thị để cấu hình!');
         return;
     }
 
-    let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || getMergedColumnConfigs(rawHeaders)));
+    let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || getMergedColumnConfigs(displayFields)));
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -330,7 +382,7 @@ function openColumnConfigModal() {
                             <tr>
                                 <th style="width:40px; text-align:center;">STT</th>
                                 <th style="width:70px; text-align:center;">Hiện</th>
-                                <th style="width:160px;">Tên gốc BigQuery</th>
+                                <th style="width:160px;">Tên gốc Looker/BQ</th>
                                 <th style="width:200px;">Tên hiển thị (Label)</th>
                                 <th style="width:170px;">Định dạng (Format)</th>
                                 <th style="width:160px;">Màu sắc (Color)</th>
@@ -450,7 +502,7 @@ function openColumnConfigModal() {
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             if (confirm('Bạn có chắc muốn khôi phục lại cấu hình cột mặc định?')) {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
-                userColumnConfigs = getMergedColumnConfigs(rawHeaders);
+                userColumnConfigs = getMergedColumnConfigs(displayFields);
                 overlay.remove();
                 renderTable();
             }
@@ -493,15 +545,14 @@ function renderTable() {
 
     // Lấy thông tin fields và raw data từ Looker Studio
     const fields = currentData.fields || {};
-    const rawHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
+    const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // Khởi tạo cấu hình cột
-    if (!userColumnConfigs) {
-        userColumnConfigs = getMergedColumnConfigs(rawHeaders);
-    } else {
-        userColumnConfigs = getMergedColumnConfigs(rawHeaders);
-    }
+    // Trích xuất CHỈ các cột cần hiển thị (Dimensions + Metrics, KHÔNG bao gồm searchFields)
+    const displayFields = extractDisplayFields(currentData);
+
+    // Khởi tạo cấu hình cột từ displayFields
+    userColumnConfigs = getMergedColumnConfigs(displayFields);
 
     // Lọc ra các cột được phép hiển thị (visible !== false)
     const activeColumns = userColumnConfigs.filter(c => c.visible !== false);
@@ -511,7 +562,7 @@ function renderTable() {
     const designatedSearchNames = [];
     if (fields.searchFields && Array.isArray(fields.searchFields) && fields.searchFields.length > 0) {
         fields.searchFields.forEach(f => {
-            const idx = rawHeaders.findIndex(h => h.id === f.id || h.name === f.name);
+            const idx = allHeaders.findIndex(h => (h.id && h.id === f.id) || h.name === f.name);
             if (idx !== -1 && !designatedSearchIndices.includes(idx)) {
                 designatedSearchIndices.push(idx);
                 designatedSearchNames.push(f.name);
@@ -864,7 +915,7 @@ function renderTable() {
         }
     }
 
-    // SỰ KIỆN XUẤT FILE EXCEL: XUẤT THEO ĐÚNG CÁC CỘT ĐANG HIỂN THỊ
+    // SỰ KIỆN XUẤT FILE EXCEL
     btnExcel.addEventListener('click', () => {
         try {
             if (!rawRows || rawRows.length === 0) {
