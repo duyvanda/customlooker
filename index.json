@@ -27,8 +27,615 @@
     ],
     "style": [
         {
+            "id": "sortingSection",
+            "label": "Sắp xếp (Sorting)",
+            "elements": [
+                {
+                    "id": "defaultSortColumn",
+                    "label": "Cột sắp xếp mặc định",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "none",
+                    "options": [
+                        { "label": "-- Không sắp xếp --", "value": "none" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
+                    ]
+                },
+                {
+                    "id": "defaultSortDirection",
+                    "label": "Chiều sắp xếp",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "asc",
+                    "options": [
+                        { "label": "Tăng dần (Ascending ▲)", "value": "asc" },
+                        { "label": "Giảm dần (Descending ▼)", "value": "desc" }
+                    ]
+                },
+                {
+                    "id": "allowHeaderSort",
+                    "label": "Cho phép click tiêu đề để sort tạm thời",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                }
+            ]
+        },
+        {
+            "id": "searchSection",
+            "label": "Tìm kiếm (Search)",
+            "elements": [
+                {
+                    "id": "showSearch",
+                    "label": "Bật ô tìm kiếm",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "defaultSearchText",
+                    "label": "Từ khóa tìm kiếm mặc định",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "searchPlaceholder",
+                    "label": "Placeholder ô tìm kiếm",
+                    "type": "TEXTINPUT",
+                    "defaultValue": "Tìm kiếm..."
+                },
+                {
+                    "id": "searchScope",
+                    "label": "Phạm vi quét tìm kiếm",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "visible",
+                    "options": [
+                        { "label": "Cột đang hiển thị (Visible columns)", "value": "visible" },
+                        { "label": "Tất cả các cột (All columns)", "value": "all" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" },
+                        { "label": "Column 21 (Cột 21)", "value": "c20" },
+                        { "label": "Column 22 (Cột 22)", "value": "c21" },
+                        { "label": "Column 23 (Cột 23)", "value": "c22" },
+                        { "label": "Column 24 (Cột 24)", "value": "c23" },
+                        { "label": "Column 25 (Cột 25)", "value": "c24" },
+                        { "label": "Column 26 (Cột 26)", "value": "c25" },
+                        { "label": "Column 27 (Cột 27)", "value": "c26" },
+                        { "label": "Column 28 (Cột 28)", "value": "c27" },
+                        { "label": "Column 29 (Cột 29)", "value": "c28" },
+                        { "label": "Column 30 (Cột 30)", "value": "c29" }
+                    ]
+                },
+                {
+                    "id": "searchMode",
+                    "label": "Chế độ khớp từ",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (Equals)", "value": "equals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" }
+                    ]
+                },
+                {
+                    "id": "searchCaseSensitive",
+                    "label": "Phân biệt chữ hoa / thường",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                }
+            ]
+        },
+        {
+            "id": "rule1Section",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 1",
+            "elements": [
+                {
+                    "id": "rule1_enable",
+                    "label": "Bật Quy Tắc 1",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "rule1_column",
+                    "label": "Cột áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "*",
+                    "options": [
+                        { "label": "★ Tất cả các cột", "value": "*" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                    ]
+                },
+                {
+                    "id": "rule1_operator",
+                    "label": "Điều kiện so sánh",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
+                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
+                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
+                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
+                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
+                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
+                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
+                        { "label": "Trong khoảng (Between)", "value": "between" },
+                        { "label": "Số dương (>= 0)", "value": "pos" },
+                        { "label": "Số âm (< 0)", "value": "neg" },
+                        { "label": "Ô rỗng (Empty)", "value": "empty" },
+                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
+                    ]
+                },
+                {
+                    "id": "rule1_value",
+                    "label": "Giá trị so sánh",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule1_value2",
+                    "label": "Giá trị thứ hai (Dành cho Between)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule1_style",
+                    "label": "Kiểu hiển thị",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "badge_success",
+                    "options": [
+                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
+                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
+                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
+                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
+                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
+                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
+                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
+                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
+                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "rule2Section",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 2",
+            "elements": [
+                {
+                    "id": "rule2_enable",
+                    "label": "Bật Quy Tắc 2",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "rule2_column",
+                    "label": "Cột áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "*",
+                    "options": [
+                        { "label": "★ Tất cả các cột", "value": "*" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                    ]
+                },
+                {
+                    "id": "rule2_operator",
+                    "label": "Điều kiện so sánh",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
+                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
+                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
+                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
+                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
+                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
+                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
+                        { "label": "Trong khoảng (Between)", "value": "between" },
+                        { "label": "Số dương (>= 0)", "value": "pos" },
+                        { "label": "Số âm (< 0)", "value": "neg" },
+                        { "label": "Ô rỗng (Empty)", "value": "empty" },
+                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
+                    ]
+                },
+                {
+                    "id": "rule2_value",
+                    "label": "Giá trị so sánh",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule2_value2",
+                    "label": "Giá trị thứ hai (Dành cho Between)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule2_style",
+                    "label": "Kiểu hiển thị",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "badge_danger",
+                    "options": [
+                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
+                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
+                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
+                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
+                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
+                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
+                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
+                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
+                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "rule3Section",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 3",
+            "elements": [
+                {
+                    "id": "rule3_enable",
+                    "label": "Bật Quy Tắc 3",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "rule3_column",
+                    "label": "Cột áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "*",
+                    "options": [
+                        { "label": "★ Tất cả các cột", "value": "*" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                    ]
+                },
+                {
+                    "id": "rule3_operator",
+                    "label": "Điều kiện so sánh",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
+                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
+                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
+                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
+                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
+                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
+                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
+                        { "label": "Trong khoảng (Between)", "value": "between" },
+                        { "label": "Số dương (>= 0)", "value": "pos" },
+                        { "label": "Số âm (< 0)", "value": "neg" },
+                        { "label": "Ô rỗng (Empty)", "value": "empty" },
+                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
+                    ]
+                },
+                {
+                    "id": "rule3_value",
+                    "label": "Giá trị so sánh",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule3_value2",
+                    "label": "Giá trị thứ hai (Dành cho Between)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule3_style",
+                    "label": "Kiểu hiển thị",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "badge_warning",
+                    "options": [
+                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
+                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
+                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
+                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
+                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
+                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
+                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
+                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
+                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "rule4Section",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 4",
+            "elements": [
+                {
+                    "id": "rule4_enable",
+                    "label": "Bật Quy Tắc 4",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "rule4_column",
+                    "label": "Cột áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "*",
+                    "options": [
+                        { "label": "★ Tất cả các cột", "value": "*" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                    ]
+                },
+                {
+                    "id": "rule4_operator",
+                    "label": "Điều kiện so sánh",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
+                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
+                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
+                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
+                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
+                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
+                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
+                        { "label": "Trong khoảng (Between)", "value": "between" },
+                        { "label": "Số dương (>= 0)", "value": "pos" },
+                        { "label": "Số âm (< 0)", "value": "neg" },
+                        { "label": "Ô rỗng (Empty)", "value": "empty" },
+                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
+                    ]
+                },
+                {
+                    "id": "rule4_value",
+                    "label": "Giá trị so sánh",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule4_value2",
+                    "label": "Giá trị thứ hai (Dành cho Between)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule4_style",
+                    "label": "Kiểu hiển thị",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "color_green",
+                    "options": [
+                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
+                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
+                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
+                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
+                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
+                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
+                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
+                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
+                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "rule5Section",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 5",
+            "elements": [
+                {
+                    "id": "rule5_enable",
+                    "label": "Bật Quy Tắc 5",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "rule5_column",
+                    "label": "Cột áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "*",
+                    "options": [
+                        { "label": "★ Tất cả các cột", "value": "*" },
+                        { "label": "Column 1 (Cột 1)", "value": "c0" },
+                        { "label": "Column 2 (Cột 2)", "value": "c1" },
+                        { "label": "Column 3 (Cột 3)", "value": "c2" },
+                        { "label": "Column 4 (Cột 4)", "value": "c3" },
+                        { "label": "Column 5 (Cột 5)", "value": "c4" },
+                        { "label": "Column 6 (Cột 6)", "value": "c5" },
+                        { "label": "Column 7 (Cột 7)", "value": "c6" },
+                        { "label": "Column 8 (Cột 8)", "value": "c7" },
+                        { "label": "Column 9 (Cột 9)", "value": "c8" },
+                        { "label": "Column 10 (Cột 10)", "value": "c9" },
+                        { "label": "Column 11 (Cột 11)", "value": "c10" },
+                        { "label": "Column 12 (Cột 12)", "value": "c11" },
+                        { "label": "Column 13 (Cột 13)", "value": "c12" },
+                        { "label": "Column 14 (Cột 14)", "value": "c13" },
+                        { "label": "Column 15 (Cột 15)", "value": "c14" },
+                        { "label": "Column 16 (Cột 16)", "value": "c15" },
+                        { "label": "Column 17 (Cột 17)", "value": "c16" },
+                        { "label": "Column 18 (Cột 18)", "value": "c17" },
+                        { "label": "Column 19 (Cột 19)", "value": "c18" },
+                        { "label": "Column 20 (Cột 20)", "value": "c19" }
+                    ]
+                },
+                {
+                    "id": "rule5_operator",
+                    "label": "Điều kiện so sánh",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "contains",
+                    "options": [
+                        { "label": "Chứa từ khóa (Contains)", "value": "contains" },
+                        { "label": "Bằng chính xác (= Equals)", "value": "equals" },
+                        { "label": "Không bằng (!= Not Equal)", "value": "notEquals" },
+                        { "label": "Bắt đầu bằng (Starts with)", "value": "startsWith" },
+                        { "label": "Kết thúc bằng (Ends with)", "value": "endsWith" },
+                        { "label": "Lớn hơn (> Greater than)", "value": ">" },
+                        { "label": "Lớn hơn hoặc bằng (>=)", "value": ">=" },
+                        { "label": "Nhỏ hơn (< Less than)", "value": "<" },
+                        { "label": "Nhỏ hơn hoặc bằng (<=)", "value": "<=" },
+                        { "label": "Trong khoảng (Between)", "value": "between" },
+                        { "label": "Số dương (>= 0)", "value": "pos" },
+                        { "label": "Số âm (< 0)", "value": "neg" },
+                        { "label": "Ô rỗng (Empty)", "value": "empty" },
+                        { "label": "Không rỗng (Not empty)", "value": "notEmpty" }
+                    ]
+                },
+                {
+                    "id": "rule5_value",
+                    "label": "Giá trị so sánh",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule5_value2",
+                    "label": "Giá trị thứ hai (Dành cho Between)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "rule5_style",
+                    "label": "Kiểu hiển thị",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "color_red",
+                    "options": [
+                        { "label": "🏷️ Badge Xanh Lá (✓ Success)", "value": "badge_success" },
+                        { "label": "🏷️ Badge Đỏ (✕ Danger)", "value": "badge_danger" },
+                        { "label": "🏷️ Badge Vàng (⏳ Warning)", "value": "badge_warning" },
+                        { "label": "🏷️ Badge Xanh Dương (Info)", "value": "badge_info" },
+                        { "label": "🏷️ Badge Xám (Default)", "value": "badge_gray" },
+                        { "label": "🎨 Chữ Xanh Lá", "value": "color_green" },
+                        { "label": "🎨 Chữ Đỏ", "value": "color_red" },
+                        { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
+                        { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                    ]
+                }
+            ]
+        },
+        {
             "id": "tableAppearance",
-            "label": "Giao diện Bảng",
+            "label": "Giao diện Bảng (Appearance)",
             "elements": [
                 {
                     "id": "defaultPageSize",
@@ -79,7 +686,8 @@
                         { "label": "12px (Vừa nhỏ)", "value": "12" },
                         { "label": "13px (Tiêu chuẩn)", "value": "13" },
                         { "label": "14px (Vừa lớn)", "value": "14" },
-                        { "label": "15px (Lớn)", "value": "15" }
+                        { "label": "15px (Lớn)", "value": "15" },
+                        { "label": "16px (Rất lớn)", "value": "16" }
                     ]
                 },
                 {
@@ -93,30 +701,12 @@
                     "label": "Tự động ngắt dòng (Text Wrap)",
                     "type": "CHECKBOX",
                     "defaultValue": false
-                }
-            ]
-        },
-        {
-            "id": "tableFeatures",
-            "label": "Tính năng Bảng",
-            "elements": [
-                {
-                    "id": "showSearch",
-                    "label": "Bật ô tìm kiếm nhanh",
-                    "type": "CHECKBOX",
-                    "defaultValue": true
                 },
                 {
-                    "id": "showColConfig",
-                    "label": "Bật nút Tùy chỉnh Cột (⚙️ Cột Bảng & Màu Sắc)",
+                    "id": "showColPopup",
+                    "label": "Cho phép người xem ẩn/hiện cột (👁️ Cột hiển thị)",
                     "type": "CHECKBOX",
                     "defaultValue": true
-                },
-                {
-                    "id": "searchPlaceholder",
-                    "label": "Gợi ý tìm kiếm tùy chỉnh",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
                 }
             ]
         }
