@@ -37,7 +37,7 @@
     "style": [
         {
             "id": "tableAppearance",
-            "label": "Giao diện Bảng",
+            "label": "Cài đặt Bảng (Admin Configuration)",
             "elements": [
                 {
                     "id": "defaultPageSize",
@@ -53,7 +53,7 @@
                         { "label": "250 dòng/trang", "value": "250" },
                         { "label": "500 dòng/trang", "value": "500" },
                         { "label": "1000 dòng/trang", "value": "1000" },
-                        { "label": "Tất cả", "value": "-1" }
+                        { "label": "Tất cả dòng (Không phân trang)", "value": "-1" }
                     ]
                 },
                 {

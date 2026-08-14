@@ -4,7 +4,6 @@ import * as dscc from '@google/dscc';
 // Khóa lưu trữ cấu hình trên localStorage
 const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom';
 const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom';
-const USER_PAGESIZE_STORAGE_KEY = 'user_tbl_pagesize_looker_custom';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
@@ -16,7 +15,8 @@ let tableState = {
     sortColumn: null,       // index trong columns đang sort (0-based)
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
-    pageSize: 20,           // Mặc định 20 dòng/trang
+    pageSize: 20,           // Mặc định
+    lastAdminPageSize: null,// Ghi nhận giá trị Admin set trong Style tab
     searchQuery: ''
 };
 
@@ -419,24 +419,6 @@ function loadConditionalRules() {
     return [];
 }
 
-// HÀM LẤY PAGE SIZE ĐÃ LƯU HOẶC MẶC ĐỊNH
-function getInitialPageSize(styleConfig) {
-    try {
-        const stored = localStorage.getItem(USER_PAGESIZE_STORAGE_KEY);
-        if (stored) {
-            const num = Number(stored);
-            if (!isNaN(num)) return num;
-        }
-    } catch (e) { }
-
-    if (styleConfig && styleConfig.defaultPageSize && styleConfig.defaultPageSize.value) {
-        const val = Number(styleConfig.defaultPageSize.value);
-        if (!isNaN(val)) return val;
-    }
-
-    return 20; // Mặc định 20 dòng/trang
-}
-
 // HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG
 function openColumnConfigModal() {
     if (!currentData) return;
@@ -722,11 +704,9 @@ function openColumnConfigModal() {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
                 localStorage.removeItem(USER_RULES_STORAGE_KEY);
-                localStorage.removeItem(USER_PAGESIZE_STORAGE_KEY);
             } catch (e) { }
             userColumnConfigs = null;
             userConditionalRules = [];
-            tableState.pageSize = 20;
             overlay.remove();
             renderTable();
         };
@@ -756,7 +736,7 @@ function renderTable() {
     const wasFocused = (document.activeElement === prevSearchInput);
     const cursorPosition = prevSearchInput ? prevSearchInput.selectionStart : null;
 
-    // Đọc cấu hình từ tab Style & Setup của Looker Studio
+    // Đọc cấu hình từ tab Style & Setup của Looker Studio (Do Admin thiết lập)
     const styleConfig = currentData.style || {};
     const rowDensity = styleConfig.rowDensity?.value || 'normal';
     const tableVariant = styleConfig.tableVariant?.value || 'striped';
@@ -766,10 +746,15 @@ function renderTable() {
     const showSearch = styleConfig.showSearch?.value !== false;
     const showColConfig = styleConfig.showColConfig?.value !== false;
 
-    // Thiết lập pageSize ban đầu nếu chưa set
-    if (!tableState.pageSizeInitialized) {
-        tableState.pageSize = getInitialPageSize(styleConfig);
-        tableState.pageSizeInitialized = true;
+    // ĐỒNG BỘ DEFAULT PAGE SIZE TỪ ADMIN SETUP TRONG LOOKER STUDIO
+    const adminDefaultPageSize = (styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined)
+        ? Number(styleConfig.defaultPageSize.value)
+        : 20;
+
+    // Nếu Admin thay đổi cấu hình trong Looker Studio panel hoặc lần render đầu
+    if (tableState.lastAdminPageSize !== adminDefaultPageSize) {
+        tableState.lastAdminPageSize = adminDefaultPageSize;
+        tableState.pageSize = adminDefaultPageSize;
     }
 
     // Lấy thông tin fields và raw data từ Looker Studio
@@ -923,9 +908,6 @@ function renderTable() {
     });
     pageSelect.addEventListener('change', (e) => {
         tableState.pageSize = Number(e.target.value);
-        try {
-            localStorage.setItem(USER_PAGESIZE_STORAGE_KEY, String(tableState.pageSize));
-        } catch (err) { }
         tableState.currentPage = 1;
         renderTable();
     });
