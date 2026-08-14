@@ -198,6 +198,25 @@ function compareValues(a, b, fieldType = '') {
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
 }
 
+// HÀM TÌM RAW INDEX CỦA FIELD TỪ DATA HEADERS (ƯU TIÊN THEO NAME RỒI MỚI THEO ID)
+function findRawIndexForField(field, allHeaders) {
+    if (!field || !allHeaders || !Array.isArray(allHeaders)) return -1;
+    const targetName = (field.name || '').trim().toLowerCase();
+    const targetId = (field.id || '').trim();
+
+    if (targetName) {
+        const idx = allHeaders.findIndex(h => h && (h.name || '').trim().toLowerCase() === targetName);
+        if (idx !== -1) return idx;
+    }
+
+    if (targetId) {
+        const idx = allHeaders.findIndex(h => h && h.id === targetId);
+        if (idx !== -1) return idx;
+    }
+
+    return -1;
+}
+
 // HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ CỦA BẢNG (DIMENSIONS + METRICS TỪ SETUP)
 function extractTableColumns(currentData) {
     if (!currentData) return [];
@@ -210,7 +229,7 @@ function extractTableColumns(currentData) {
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
         fields.dimensions.forEach((f, fIdx) => {
             if (!f) return;
-            const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === f.id) || h.name === f.name));
+            const rawIdx = findRawIndexForField(f, allHeaders);
             const actualIdx = rawIdx !== -1 ? rawIdx : fIdx;
             if (!cols.some(c => c.rawIndex === actualIdx)) {
                 cols.push({
@@ -226,7 +245,7 @@ function extractTableColumns(currentData) {
     if (fields.metrics && Array.isArray(fields.metrics)) {
         fields.metrics.forEach((f, fIdx) => {
             if (!f) return;
-            const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === f.id) || h.name === f.name));
+            const rawIdx = findRawIndexForField(f, allHeaders);
             const actualIdx = rawIdx !== -1 ? rawIdx : (cols.length + fIdx);
             if (!cols.some(c => c.rawIndex === actualIdx)) {
                 cols.push({
@@ -268,7 +287,7 @@ function extractSearchColumns(currentData, tableColumns) {
         const matchedSearchCols = [];
         setupSearchFields.forEach(sf => {
             if (!sf) return;
-            const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === sf.id) || h.name === sf.name));
+            const rawIdx = findRawIndexForField(sf, allHeaders);
             if (rawIdx !== -1 && !matchedSearchCols.some(mc => mc.rawIndex === rawIdx)) {
                 matchedSearchCols.push({
                     fieldId: sf.id,
@@ -310,7 +329,7 @@ function extractSetupSortConfig(currentData, styleConfig) {
     const sortLevels = [];
     allSetupSort.forEach((sf, idx) => {
         if (!sf) return;
-        const rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === sf.id) || h.name === sf.name));
+        const rawIdx = findRawIndexForField(sf, allHeaders);
         if (rawIdx !== -1) {
             sortLevels.push({
                 level: idx + 1,
@@ -348,7 +367,7 @@ function extractSetupConditionalRules(currentData, styleConfig) {
         let fieldName = '*';
 
         if (boundField) {
-            rawIdx = allHeaders.findIndex(h => h && ((h.id && h.id === boundField.id) || h.name === boundField.name));
+            rawIdx = findRawIndexForField(boundField, allHeaders);
             fieldName = boundField.name || boundField.id;
         }
 
@@ -498,6 +517,12 @@ function applyFrozenColumnOffsets(table, showSTT) {
 
                 leftOffset += width;
                 lastFrozenColIdx = colIdx;
+            } else {
+                th.style.left = '';
+                tbodyRows.forEach(row => {
+                    const td = row.children[colIdx];
+                    if (td) td.style.left = '';
+                });
             }
         });
 
@@ -623,9 +648,10 @@ function renderTable() {
         const setupSortLevels = extractSetupSortConfig(currentData, styleConfig);
         const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig);
 
-        // Trích xuất danh sách Dimension cần Cố định cột (Freeze Columns) từ Setup
+        // Trích xuất danh sách Dimension cần Cố định cột (Freeze Columns) từ Setup - Kiểm tra CẢ NAME và ID
         const freezeDims = Array.isArray(fields.freezeDimensions) ? fields.freezeDimensions : [];
-        const freezeFieldIds = new Set(freezeDims.map(f => f.id));
+        const freezeNames = new Set(freezeDims.map(f => (f.name || '').trim().toLowerCase()).filter(Boolean));
+        const freezeIds = new Set(freezeDims.map(f => (f.id || '').trim()).filter(Boolean));
 
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
@@ -647,9 +673,10 @@ function renderTable() {
         // 2. XÁC ĐỊNH VISIBLE COLUMNS
         const visibleColumns = tableColumns.filter(c => !runtimeState.hiddenColumns.has(c.fieldId) && !runtimeState.hiddenColumns.has(c.name));
 
-        // Đánh dấu trạng thái Freeze cho từng cột
+        // Đánh dấu trạng thái Freeze cho từng cột (Khớp chính xác theo name hoặc id của field trong Freeze Dimension)
         visibleColumns.forEach(col => {
-            col.isFrozen = freezeFieldIds.has(col.fieldId);
+            const colNameLower = (col.name || '').trim().toLowerCase();
+            col.isFrozen = freezeNames.has(colNameLower) || freezeIds.has(col.fieldId);
         });
 
         // 3. RAW DATA
@@ -1044,9 +1071,9 @@ function renderTable() {
 
         appRoot.appendChild(wrapper);
 
-        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS
+        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS (CHÍNH XÁC THEO TỪNG CỘT)
         applyFrozenColumnOffsets(table, showSTT);
-        setTimeout(() => applyFrozenColumnOffsets(table, showSTT), 50);
+        setTimeout(() => applyFrozenColumnOffsets(table, showSTT), 60);
 
         // KHÔI PHỤC FOCUS Ô SEARCH
         if (wasFocused) {
@@ -1058,7 +1085,7 @@ function renderTable() {
             }
         }
 
-        // SỰ KIỆN XUẤT FILE EXCEL
+        // SỰ KIỆN XUẤT FILE EXCEL (.XLSX)
         btnExcel.addEventListener('click', () => {
             try {
                 if (!rawRows || rawRows.length === 0) {

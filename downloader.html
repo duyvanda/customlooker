@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xuất Dữ Liệu Looker Studio</title>
+    <title>Xuất Dữ Liệu Excel</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -22,7 +22,7 @@
             background: white;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            max-width: 680px;
+            max-width: 640px;
             width: 100%;
             padding: 36px;
         }
@@ -69,7 +69,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 20px;
+            padding: 12px 22px;
             border-radius: 8px;
             font-weight: 600;
             font-size: 14px;
@@ -80,8 +80,6 @@
         }
         .btn-green { background: #107c41; color: white; }
         .btn-green:hover { background: #0b5c30; }
-        .btn-blue { background: #0284c7; color: white; }
-        .btn-blue:hover { background: #0369a1; }
         .btn-gray { background: #e5e7eb; color: #374151; }
         .btn-gray:hover { background: #d1d5db; }
         
@@ -130,7 +128,6 @@
 
     <div class="action-bar" id="actionBar" style="display: none;">
         <button class="btn btn-green" id="btnDownloadExcel">📥 Tải File Excel (.xlsx)</button>
-        <button class="btn btn-blue" id="btnDownloadCsv">📄 Tải File CSV (.csv)</button>
         <button class="btn btn-gray" id="btnCopyJson">📋 Copy Dữ Liệu JSON (cho API)</button>
     </div>
 
@@ -163,7 +160,7 @@
         setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
-    // Xuất file Excel chuẩn từ mảng 2D (Bảo toàn số 0 ở đầu cho SĐT, Mã định danh, Text)
+    // Xuất file Excel chuẩn từ mảng 2D (Bảo toàn 100% số 0 ở đầu cho SĐT, Mã định danh, Text)
     function downloadExcelFile(headers, rows, fileName) {
         try {
             const ws = {};
@@ -186,12 +183,11 @@
                         ws[cellRef] = { v: val, t: 'n' };
                     } else {
                         const sVal = String(val).trim();
-                        // Nếu là chuỗi bắt đầu bằng '0' và có nhiều hơn 1 chữ số (ví dụ SĐT 0912..., Mã 001...)
-                        // BẮT BUỘC giữ kiểu text 's' để KHÔNG BAO GIỜ bị mất số 0 ở đầu!
+                        // Nếu là chuỗi có số 0 ở đầu (SĐT 0912..., Mã 001...) -> BẮT BUỘC giữ text 's' kèm format '@'
                         if (/^0\d+$/.test(sVal)) {
                             ws[cellRef] = { v: sVal, t: 's', z: '@' };
                         } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
-                            // Số thực thông thường (ví dụ: 1250000, 45.6, -10)
+                            // Số thực thông thường
                             ws[cellRef] = { v: Number(sVal), t: 'n' };
                         } else {
                             ws[cellRef] = { v: String(val), t: 's' };
@@ -240,44 +236,6 @@
         }
     }
 
-    // Xuất file CSV UTF-8 with BOM (Bảo toàn số 0 ở đầu cho Excel khi mở CSV)
-    function downloadCsvFile(headers, rows, fileName) {
-        try {
-            let csvContent = '\uFEFF';
-            csvContent += headers.map(h => `"${String(h || '').replace(/"/g, '""')}"`).join(',') + '\r\n';
-            rows.forEach(row => {
-                const line = row.map(val => {
-                    if (val === null || val === undefined) return '""';
-                    const sVal = String(val);
-                    // Chuỗi có số 0 ở đầu (SĐT 0912..., Mã 012...) dùng format text `="0912..."` để Excel không nuốt số 0
-                    if (/^0\d+$/.test(sVal.trim())) {
-                        return `="${sVal.trim()}"`;
-                    }
-                    return `"${sVal.replace(/"/g, '""')}"`;
-                }).join(',');
-                csvContent += line + '\r\n';
-            });
-
-            const csvFileName = fileName.replace(/\.xlsx$/i, '') + '.csv';
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = csvFileName;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 2000);
-
-            return true;
-        } catch (err) {
-            console.error('Lỗi tạo CSV:', err);
-            return false;
-        }
-    }
-
     function processPayload(payload) {
         if (hasProcessed) return;
         hasProcessed = true;
@@ -297,7 +255,7 @@
                     } else {
                         const sVal = String(val).trim();
                         if (/^0\d+$/.test(sVal)) {
-                            obj[h] = sVal; // Giữ nguyên chuỗi số 0 ở đầu
+                            obj[h] = sVal;
                         } else if (typeof val === 'number') {
                             obj[h] = val;
                         } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
@@ -319,7 +277,7 @@
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
         document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
         document.getElementById('subtitle').textContent = success 
-            ? 'File đã được lưu vào thư mục Downloads của bạn (đã bảo toàn số 0 ở đầu cho SĐT, Mã định danh).'
+            ? 'File Excel (.xlsx) đã được lưu vào thư mục Downloads của bạn.'
             : 'Vui lòng bấm nút Tải File Excel bên dưới.';
 
         document.getElementById('actionBar').style.display = 'flex';
@@ -344,13 +302,6 @@
         if (!globalData) return;
         downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName);
         showToast('📥 Đang tải file Excel (.xlsx)...');
-    });
-
-    // Nút Tải File CSV
-    document.getElementById('btnDownloadCsv').addEventListener('click', () => {
-        if (!globalData) return;
-        downloadCsvFile(globalData.headers, globalData.rows, globalData.fileName);
-        showToast('📄 Đang tải file CSV (UTF-8)...');
     });
 
     // Nút Copy JSON
