@@ -1,6 +1,5 @@
-// Import thư viện Looker Studio Community Viz SDK & SheetJS
+// Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
-import * as XLSX from 'xlsx';
 
 // Biến trạng thái runtime trong bộ nhớ JS (Hoàn toàn không dùng storage / localStorage / bridge)
 let currentData = null;
@@ -142,89 +141,32 @@ function isNumericValue(val, fieldType = '') {
     return /^-?\d+(\.\d+)?$/.test(s);
 }
 
-// HÀM TẢI FILE EXCEL TRỰC TIẾP TẠI CHỖ (HỖ TRỢ ANDROID, IN-APP WEBVIEW & DESKTOP)
-function triggerDirectExcelDownload(headers, rows, fileName) {
+// HÀM MỞ HELPER XUẤT EXCEL (VƯỢT QUA GIỚI HẠN SANDBOX ALLOW-DOWNLOADS CỦA GOOGLE)
+const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart2/downloader.html';
+
+function downloadViaHelper(payload) {
     try {
-        const ws = {};
-        const range = { s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: rows.length } };
-
-        // Ghi Headers
-        headers.forEach((h, colIdx) => {
-            const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: 0 });
-            ws[cellRef] = { v: String(h || ''), t: 's' };
-        });
-
-        // Ghi Rows (Bảo toàn số 0 ở đầu)
-        rows.forEach((row, rowIdx) => {
-            const r = rowIdx + 1;
-            row.forEach((val, colIdx) => {
-                const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: r });
-                if (val === null || val === undefined || val === '') {
-                    ws[cellRef] = { v: '', t: 's' };
-                } else if (typeof val === 'number') {
-                    ws[cellRef] = { v: val, t: 'n' };
-                } else {
-                    const sVal = String(val).trim();
-                    if (/^0\d+$/.test(sVal)) {
-                        ws[cellRef] = { v: sVal, t: 's', z: '@' };
-                    } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
-                        ws[cellRef] = { v: Number(sVal), t: 'n' };
-                    } else {
-                        ws[cellRef] = { v: String(val), t: 's' };
-                    }
-                }
-            });
-        });
-
-        ws['!ref'] = XLSX.utils.encode_range(range);
-
-        // Tự động căn chỉnh độ rộng cột
-        const colWidths = headers.map((h, colIdx) => {
-            let maxLen = String(h || '').length;
-            rows.forEach(r => {
-                const val = r[colIdx];
-                if (val !== null && val !== undefined) {
-                    maxLen = Math.max(maxLen, String(val).length);
-                }
-            });
-            return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
-        });
-        ws['!cols'] = colWidths;
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "RawData");
-
-        const actualFileName = fileName.endsWith('.xlsx') ? fileName : (fileName + '.xlsx');
-
-        // Tạo Binary Blob và tải trực tiếp trong DOM (Không cần mở tab mới, chạy 100% trên Android App WebView)
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-            window.navigator.msSaveOrOpenBlob(blob, actualFileName);
-            showToast('✅ Đã tải file Excel (.xlsx) thành công!');
-            return true;
+        const helperWindow = window.open(DOWNLOADER_URL, '_blank');
+        if (!helperWindow) {
+            alert('Popup bị chặn! Vui lòng cho phép popup (Allow Popups) trên trình duyệt cho trang Looker Studio.');
+            return;
         }
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = actualFileName;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-
-        setTimeout(() => {
-            if (a.parentNode) a.parentNode.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 3000);
-
-        showToast('✅ Đã tải file Excel (.xlsx) thành công!');
-        return true;
-    } catch (err) {
-        console.error('[ExcelViz] triggerDirectExcelDownload error:', err);
-        alert('Lỗi khi tải file: ' + err.message);
-        return false;
+        let attempts = 0;
+        const maxAttempts = 20;
+        const interval = setInterval(() => {
+            attempts++;
+            try {
+                helperWindow.postMessage(payload, '*');
+            } catch (e) {
+                console.error('[ExcelViz] postMessage error:', e);
+            }
+            if (attempts >= maxAttempts) {
+                clearInterval(interval);
+            }
+        }, 300);
+    } catch (e) {
+        console.error('[ExcelViz] download error:', e);
     }
 }
 
@@ -1254,8 +1196,16 @@ function renderTable() {
 
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
+                const filterInfo = extractActiveFilterInfo(currentData);
 
-                triggerDirectExcelDownload(exportHeaders, excelRows, fileName);
+                downloadViaHelper({
+                    type: 'EXCEL_DOWNLOAD',
+                    headers: exportHeaders,
+                    rows: excelRows,
+                    excelData: excelDataObjects,
+                    filterInfo: filterInfo,
+                    fileName: fileName
+                });
 
             } catch (err) {
                 console.error('[ExcelViz] Export error:', err);
