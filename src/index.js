@@ -1,9 +1,10 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage
+// Khóa lưu trữ cấu hình trên localStorage
 const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom';
 const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom';
+const USER_PAGESIZE_STORAGE_KEY = 'user_tbl_pagesize_looker_custom';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
@@ -15,7 +16,7 @@ let tableState = {
     sortColumn: null,       // index trong columns đang sort (0-based)
     sortDirection: 'asc',   // 'asc' | 'desc'
     currentPage: 1,
-    pageSize: 25,           // 10 | 20 | 25 | 50 | 100 | 250 | 500 | 1000 | -1 (Tất cả)
+    pageSize: 20,           // Mặc định 20 dòng/trang
     searchQuery: ''
 };
 
@@ -179,7 +180,6 @@ function evaluateConditionalRules(fieldName, val, rules) {
     const num = isNum ? Number(val) : NaN;
 
     for (const rule of rules) {
-        // Kiểm tra đúng cột áp dụng hoặc tất cả cột (*)
         if (rule.field !== '*' && rule.field !== fieldName) continue;
 
         let matched = false;
@@ -206,7 +206,7 @@ function evaluateConditionalRules(fieldName, val, rules) {
         }
 
         if (matched) {
-            return rule.style; // Trả về style được cấu hình
+            return rule.style;
         }
     }
 
@@ -419,6 +419,24 @@ function loadConditionalRules() {
     return [];
 }
 
+// HÀM LẤY PAGE SIZE ĐÃ LƯU HOẶC MẶC ĐỊNH
+function getInitialPageSize(styleConfig) {
+    try {
+        const stored = localStorage.getItem(USER_PAGESIZE_STORAGE_KEY);
+        if (stored) {
+            const num = Number(stored);
+            if (!isNaN(num)) return num;
+        }
+    } catch (e) { }
+
+    if (styleConfig && styleConfig.defaultPageSize && styleConfig.defaultPageSize.value) {
+        const val = Number(styleConfig.defaultPageSize.value);
+        if (!isNaN(val)) return val;
+    }
+
+    return 20; // Mặc định 20 dòng/trang
+}
+
 // HÀM MỞ MODAL TÙY CHỈNH CỘT BẢNG & QUY TẮC MÀU ĐỘNG
 function openColumnConfigModal() {
     if (!currentData) return;
@@ -428,7 +446,7 @@ function openColumnConfigModal() {
         return;
     }
 
-    let activeTab = 'columns'; // 'columns' | 'rules'
+    let activeTab = 'columns';
     let workingConfigs = JSON.parse(JSON.stringify(userColumnConfigs || getMergedColumnConfigs(displayFields)));
     let workingRules = JSON.parse(JSON.stringify(userConditionalRules || loadConditionalRules()));
 
@@ -589,13 +607,11 @@ function openColumnConfigModal() {
             </div>
         `;
 
-        // Switch Tabs
         overlay.querySelector('#tab-btn-columns').onclick = () => { activeTab = 'columns'; renderModalContent(); };
         overlay.querySelector('#tab-btn-rules').onclick = () => { activeTab = 'rules'; renderModalContent(); };
         overlay.querySelector('#btn-close-modal').onclick = () => overlay.remove();
         overlay.querySelector('#btn-cancel-modal').onclick = () => overlay.remove();
 
-        // Gán sự kiện cho Tab Columns
         if (activeTab === 'columns') {
             overlay.querySelectorAll('.col-vis-chk').forEach(chk => {
                 chk.onchange = (e) => {
@@ -650,7 +666,6 @@ function openColumnConfigModal() {
             });
         }
 
-        // Gán sự kiện cho Tab Rules
         if (activeTab === 'rules') {
             const addRuleBtn = overlay.querySelector('#btn-add-rule');
             if (addRuleBtn) {
@@ -703,19 +718,19 @@ function openColumnConfigModal() {
             });
         }
 
-        // Reset toàn bộ
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
                 localStorage.removeItem(USER_RULES_STORAGE_KEY);
+                localStorage.removeItem(USER_PAGESIZE_STORAGE_KEY);
             } catch (e) { }
             userColumnConfigs = null;
             userConditionalRules = [];
+            tableState.pageSize = 20;
             overlay.remove();
             renderTable();
         };
 
-        // Lưu toàn bộ cấu hình & quy tắc
         overlay.querySelector('#btn-save-modal').onclick = () => {
             userColumnConfigs = workingConfigs;
             userConditionalRules = workingRules;
@@ -751,22 +766,26 @@ function renderTable() {
     const showSearch = styleConfig.showSearch?.value !== false;
     const showColConfig = styleConfig.showColConfig?.value !== false;
 
+    // Thiết lập pageSize ban đầu nếu chưa set
+    if (!tableState.pageSizeInitialized) {
+        tableState.pageSize = getInitialPageSize(styleConfig);
+        tableState.pageSizeInitialized = true;
+    }
+
     // Lấy thông tin fields và raw data từ Looker Studio
     const fields = currentData.fields || {};
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const rawRows = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.rows : [];
 
-    // Trích xuất CHỈ các cột cần hiển thị (Dimensions + Metrics, KHÔNG bao gồm searchFields)
+    // Trích xuất CHỈ các cột cần hiển thị
     const displayFields = extractDisplayFields(currentData);
 
-    // Khởi tạo cấu hình cột từ displayFields và load rules
     userColumnConfigs = getMergedColumnConfigs(displayFields);
     userConditionalRules = loadConditionalRules();
 
-    // Lọc ra các cột được phép hiển thị (visible !== false)
     const activeColumns = userColumnConfigs.filter(c => c.visible !== false);
 
-    // Xác định các cột dùng để tìm kiếm (searchFields được kéo vào Setup)
+    // Xác định các cột tìm kiếm
     const designatedSearchIndices = [];
     const designatedSearchNames = [];
     if (fields.searchFields && Array.isArray(fields.searchFields) && fields.searchFields.length > 0) {
@@ -779,7 +798,6 @@ function renderTable() {
         });
     }
 
-    // Placeholder cho ô tìm kiếm
     let autoPlaceholder = 'Tìm kiếm nhanh...';
     if (designatedSearchNames.length > 0) {
         autoPlaceholder = `Tìm theo: ${designatedSearchNames.join(', ')}...`;
@@ -905,6 +923,9 @@ function renderTable() {
     });
     pageSelect.addEventListener('change', (e) => {
         tableState.pageSize = Number(e.target.value);
+        try {
+            localStorage.setItem(USER_PAGESIZE_STORAGE_KEY, String(tableState.pageSize));
+        } catch (err) { }
         tableState.currentPage = 1;
         renderTable();
     });
@@ -971,7 +992,6 @@ function renderTable() {
         pageRows.forEach((row, rowIdx) => {
             const tr = document.createElement('tr');
 
-            // Cột STT
             if (showSTT) {
                 const sttTd = document.createElement('td');
                 sttTd.className = 'cell-stt';
@@ -983,7 +1003,6 @@ function renderTable() {
                 const td = document.createElement('td');
                 const rawVal = row[col.rawIndex];
                 
-                // Smart Alignment
                 const isDate = isValidDate(String(rawVal)) || col.format.startsWith('date');
                 const isNum = isNumericValue(rawVal) || ['number_comma', 'number_vn', 'currency', 'percent'].includes(col.format);
 
@@ -997,7 +1016,6 @@ function renderTable() {
 
                 if (textWrap) td.classList.add('text-wrap-cell');
 
-                // Áp dụng định dạng và quy tắc màu động
                 td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules);
                 tr.appendChild(td);
             });
