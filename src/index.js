@@ -34,6 +34,24 @@ try {
     window.addEventListener('mousedown', () => { try { window.focus(); } catch (e) { } });
 } catch (e) { }
 
+// HÀM HIỂN THỊ TOAST THÔNG BÁO TỨC THÌ
+function showToast(message) {
+    try {
+        let toast = document.getElementById('excelviz-toast');
+        if (toast) toast.remove();
+        toast = document.createElement('div');
+        toast.id = 'excelviz-toast';
+        toast.className = 'toast-msg';
+        toast.innerHTML = `<span>✓</span> <span>${message}</span>`;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            if (toast) toast.remove();
+        }, 3000);
+    } catch (e) {
+        console.log(message);
+    }
+}
+
 // HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT
 function remove_accents(str) {
     if (str === null || str === undefined) return '';
@@ -628,6 +646,171 @@ function openRuntimeColumnsPopup(tableColumns) {
     }
 }
 
+// HÀM MỞ POPUP COPY DỮ LIỆU ĐANG LỌC (DÀNH CHO BỘ LỌC LOOKER STUDIO HOẶC EXCEL)
+function openCopyFilterDataPopup(visibleColumns, sortedRows, showSTT) {
+    try {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'copy-filter-modal';
+
+        overlay.innerHTML = `
+            <div class="modal-dialog" style="max-width: 520px;">
+                <div class="modal-header">
+                    <span style="font-weight: 700; font-size: 13.5px; color: #0f172a;">📋 Sao Chép Dữ Liệu Bộ Lọc (${sortedRows.length} dòng)</span>
+                    <button class="modal-close-btn" id="btn-close-copy-modal">✕</button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="font-size: 11.5px; color: #475569; line-height: 1.45;">
+                        💡 Sao chép danh sách giá trị đang hiển thị/lọc để dán trực tiếp vào <strong>Bộ lọc Looker Studio</strong> (Filter Control) hoặc dán vào Excel/Sheets.
+                    </div>
+
+                    <div>
+                        <label style="font-size: 12px; font-weight: 700; color: #0f172a; display: block; margin-bottom: 4px;">Chọn cột muốn sao chép:</label>
+                        <select id="copy-col-select" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12.5px; font-weight: 600; font-family: inherit; outline: none;">
+                            <option value="__ALL__">📊 Tất cả các cột (Dạng bảng TSV dán thẳng vào Excel/Sheets)</option>
+                            ${visibleColumns.map(c => `<option value="${c.rawIndex}">🔹 ${c.name}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="font-size: 12px; font-weight: 700; color: #0f172a; display: block; margin-bottom: 4px;">Định dạng phân tách:</label>
+                        <select id="copy-delimiter-select" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12.5px; font-weight: 600; font-family: inherit; outline: none;">
+                            <option value="newline">↵ Xuống dòng (\\n) — Chuẩn để paste vào Bộ lọc Looker Studio</option>
+                            <option value="comma">, Dấu phẩy (, )</option>
+                            <option value="semicolon">; Dấu chấm phẩy (; )</option>
+                            <option value="tab">⇥ Tab (\\t — Dạng bảng)</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px;">
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #1e293b; cursor: pointer;">
+                            <input type="checkbox" id="copy-opt-unique" checked style="cursor: pointer; width: 15px; height: 15px;">
+                            <span>Chỉ lấy giá trị duy nhất (Unique)</span>
+                        </label>
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #1e293b; cursor: pointer;">
+                            <input type="checkbox" id="copy-opt-nonempty" checked style="cursor: pointer; width: 15px; height: 15px;">
+                            <span>Bỏ qua ô trống</span>
+                        </label>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="font-size: 12px; font-weight: 700; color: #0f172a;">Xem trước dữ liệu:</label>
+                            <span id="copy-count-badge" style="font-size: 11.5px; color: #15803d; font-weight: 700;"></span>
+                        </div>
+                        <textarea id="copy-preview-area" readonly style="width: 100%; height: 110px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; background: #f8fafc; color: #0f172a; resize: none; outline: none;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-modal-reset" id="btn-cancel-copy">Đóng</button>
+                    <button class="btn-modal-blue" id="btn-do-copy">📋 Sao Chép Vào Clipboard</button>
+                </div>
+            </div>
+        `;
+
+        const selectCol = overlay.querySelector('#copy-col-select');
+        const selectDelim = overlay.querySelector('#copy-delimiter-select');
+        const chkUnique = overlay.querySelector('#copy-opt-unique');
+        const chkNonEmpty = overlay.querySelector('#copy-opt-nonempty');
+        const previewArea = overlay.querySelector('#copy-preview-area');
+        const countBadge = overlay.querySelector('#copy-count-badge');
+
+        function generateCopyText() {
+            const colVal = selectCol.value;
+            const delimMode = selectDelim.value;
+            const isUnique = chkUnique.checked;
+            const isNonEmpty = chkNonEmpty.checked;
+
+            let delimiter = '\n';
+            if (delimMode === 'comma') delimiter = ', ';
+            else if (delimMode === 'semicolon') delimiter = '; ';
+            else if (delimMode === 'tab') delimiter = '\t';
+
+            if (colVal === '__ALL__') {
+                // Copy toàn bộ bảng TSV
+                const lines = [];
+                const headerLine = [];
+                if (showSTT) headerLine.push('STT');
+                visibleColumns.forEach(c => headerLine.push(c.name));
+                lines.push(headerLine.join('\t'));
+
+                sortedRows.forEach((row, rIdx) => {
+                    const rowVals = [];
+                    if (showSTT) rowVals.push(rIdx + 1);
+                    visibleColumns.forEach(c => {
+                        const val = row ? row[c.rawIndex] : '';
+                        if (val === null || val === undefined) rowVals.push('');
+                        else if (isDateValue(val, c.type)) rowVals.push(formatDateValue(val, 'date'));
+                        else rowVals.push(String(val));
+                    });
+                    lines.push(rowVals.join('\t'));
+                });
+
+                countBadge.textContent = `${sortedRows.length} dòng × ${visibleColumns.length} cột`;
+                return lines.join('\n');
+            } else {
+                // Copy 1 cột cụ thể
+                const rawIdx = parseInt(colVal, 10);
+                const targetCol = visibleColumns.find(c => c.rawIndex === rawIdx);
+                const colType = targetCol ? targetCol.type : '';
+
+                let values = sortedRows.map(row => {
+                    const val = row ? row[rawIdx] : '';
+                    if (val === null || val === undefined) return '';
+                    if (isDateValue(val, colType)) return formatDateValue(val, 'date');
+                    return String(val).trim();
+                });
+
+                if (isNonEmpty) {
+                    values = values.filter(v => v !== '');
+                }
+
+                if (isUnique) {
+                    values = Array.from(new Set(values));
+                }
+
+                countBadge.textContent = `${values.length} giá trị`;
+                return values.join(delimiter);
+            }
+        }
+
+        function updatePreview() {
+            const fullText = generateCopyText();
+            previewArea.value = fullText;
+        }
+
+        selectCol.onchange = updatePreview;
+        selectDelim.onchange = updatePreview;
+        chkUnique.onchange = updatePreview;
+        chkNonEmpty.onchange = updatePreview;
+
+        updatePreview();
+
+        overlay.querySelector('#btn-close-copy-modal').onclick = () => overlay.remove();
+        overlay.querySelector('#btn-cancel-copy').onclick = () => overlay.remove();
+
+        overlay.querySelector('#btn-do-copy').onclick = () => {
+            const textToCopy = generateCopyText();
+            if (!textToCopy) {
+                alert('Không có dữ liệu để sao chép!');
+                return;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast(`Đã sao chép ${countBadge.textContent} vào Clipboard!`);
+                overlay.remove();
+            }).catch(() => {
+                prompt('Nhấn Ctrl + C để sao chép:', textToCopy);
+                overlay.remove();
+            });
+        };
+
+        document.body.appendChild(overlay);
+    } catch (err) {
+        console.error('[ExcelViz] openCopyFilterDataPopup error:', err);
+    }
+}
+
 // HÀM RENDER BẢNG CHÍNH VÀO #EXCELVIZ-APP-ROOT THEO PIPELINE CHUẨN
 function renderTable() {
     try {
@@ -782,6 +965,14 @@ function renderTable() {
             <span>Xuất Excel (${rawRows.length.toLocaleString('vi-VN')} dòng)</span>
         `;
         toolbarLeft.appendChild(btnExcel);
+
+        // Nút Sao Chép Dữ Liệu Bộ Lọc
+        const btnCopyFilter = document.createElement('button');
+        btnCopyFilter.className = 'btn-copy-filter';
+        btnCopyFilter.innerHTML = `<span>📋 Copy dữ liệu lọc</span>`;
+        btnCopyFilter.title = 'Sao chép danh sách các giá trị đang lọc để dán vào Bộ lọc Looker Studio hoặc Excel';
+        btnCopyFilter.onclick = () => openCopyFilterDataPopup(visibleColumns, sortedRows, showSTT);
+        toolbarLeft.appendChild(btnCopyFilter);
 
         // Nút Popup Ẩn/Hiện Cột
         if (showColPopup) {
