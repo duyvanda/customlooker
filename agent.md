@@ -110,6 +110,35 @@ Looker Studio (Google Data Studio) mặc định không hỗ trợ nút bấm tr
 
 ---
 
+### 3.5. 🛡️ Phân Tích Kỹ Thuật: Cơ Chế Xuất File, Giới Hạn Sandbox & Vấn Đề Android WebView
+
+#### A. Giới hạn `allow-downloads` trong Iframe của Google Looker Studio:
+- Google Looker Studio nhúng Community Visualization trong một iframe bảo mật nghiêm ngặt và **cố tình không cấp cờ `allow-downloads`**.
+- Nếu thực hiện tải file trực tiếp tại chỗ bằng `<a>.click()` hoặc `Blob` bên trong iframe, trình duyệt Chromium sẽ chặn với thông báo:
+  ```
+  Download is disallowed. The frame initiating or instantiating the download is sandboxed, but the flag 'allow-downloads' is not set.
+  ```
+- **Giải pháp xử lý chuẩn:** Sử dụng cơ chế mở tab helper [`downloader.html`](file:///D:/customLooker/downloader.html) qua `window.open()`. Vì `downloader.html` là một tab cấp cao nhất (Top-level window context), nó hoàn toàn thoát khỏi môi trường sandbox của iframe và tải file `.xlsx` về máy bình thường.
+
+#### B. Vấn đề trên Android App (In-App WebView):
+- **Hiện tượng:** Khi báo cáo Looker Studio được nhúng vào một Ứng dụng di động Android (Android WebView, Flutter WebView, React Native WebView...), khi bấm nút Xuất Excel, tab `downloader.html` mở lên nhưng bị quay vòng vô tận (Loading mãi).
+- **Nguyên nhân cốt lõi:**
+  - Android WebView mặc định cô lập các cửa sổ được mở bởi `window.open` thành các context độc lập và ngắt đứt liên lạc `postMessage` giữa 2 cửa sổ.
+  - Khi đó, dữ liệu bảng từ Looker Studio không thể truyền sang tab `downloader.html`, khiến màn hình chờ không nhận được dữ liệu.
+- **Các giải pháp khắc phục triệt để:**
+  1. **Dành cho Người Dùng Cuối (End-user Workaround):**
+     - Mở báo cáo bằng trình duyệt di động chuẩn (**Google Chrome** trên Android hoặc **Safari** trên iOS) thay vì xem qua WebView nhúng của App. Trên Chrome/Safari mobile, tính năng tải file hoạt động 100% mượt mà.
+  2. **Dành cho Lập Trình Viên Ứng Dụng (Android App Devs):**
+     - Trong mã nguồn Native của App Android, cần cấu hình WebView hỗ trợ đa cửa sổ và WebChromeClient:
+       ```kotlin
+       webView.settings.setSupportMultipleWindows(true)
+       webView.settings.javaScriptCanOpenWindowsAutomatically = true
+       webView.webChromeClient = WebChromeClient()
+       ```
+       Khi cấu hình này được kích hoạt, Android WebView sẽ duy trì kênh truyền thông `postMessage` giữa 2 cửa sổ và cho phép tải file Excel bình thường.
+
+---
+
 ## 4. 📁 Cấu Trúc File Dự Án
 
 ```
@@ -119,7 +148,7 @@ D:\customLooker/
 ├── downloader.html           # Helper tab tải file Excel .xlsx bảo toàn số 0 và copy JSON Date Range
 ├── index.css                 # Toàn bộ CSS giao diện bảng, sticky frozen columns, badges, variants, densities
 ├── index.json                # Schema Setup & Style chính thức của Looker Studio Community Viz
-├── manifest.json             # File Manifest khai báo tài nguyên Community Viz ("devMode": false)
+├── manifest.json             # File Manifest khai báo tài nguyên Community Viz ("devMode": true)
 ├── webpack.config.js         # Cấu hình đóng gói bundle JS tối ưu dung lượng
 ├── package.json              # Khai báo dependencies npm (@google/dscc, webpack)
 ├── index.bundle.js           # File bundle JS sản phẩm (~30.6 KB)
