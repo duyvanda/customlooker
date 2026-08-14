@@ -9,11 +9,11 @@ let tableState = {
     sortColumn: null,      // index cột đang sort (0-based)
     sortDirection: 'asc',  // 'asc' | 'desc'
     currentPage: 1,
-    pageSize: 25,          // 10 | 25 | 50 | 100 | -1 (Tất cả)
+    pageSize: 25,          // 10 | 25 | 50 | 100 | 250 | 500 | 1000 | -1 (Tất cả)
     searchQuery: ''
 };
 
-// HÀM HIỂN THỊ SKELETON LOADING (Nhúng trực tiếp CSS để hiển thị tức thì 100%)
+// HÀM HIỂN THỊ SKELETON LOADING
 function showSkeleton() {
     try {
         if (!document.body) return;
@@ -27,7 +27,7 @@ function showSkeleton() {
                     100% { background-position: 200% 0; }
                 }
                 .skeleton {
-                    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+                    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
                     background-size: 200% 100%;
                     animation: shimmer 1.4s ease-in-out infinite;
                     border-radius: 6px;
@@ -35,14 +35,14 @@ function showSkeleton() {
                 .skeleton-container {
                     display: flex;
                     flex-direction: column;
-                    gap: 12px;
-                    padding: 10px;
+                    gap: 10px;
+                    padding: 12px;
                     box-sizing: border-box;
                     width: 100%;
                 }
                 .skeleton-btn {
-                    width: 210px;
-                    height: 36px;
+                    width: 200px;
+                    height: 34px;
                 }
                 .skeleton-table {
                     width: 100%;
@@ -52,10 +52,10 @@ function showSkeleton() {
                 }
                 .skeleton-header {
                     height: 38px;
-                    opacity: 0.85;
+                    opacity: 0.9;
                 }
                 .skeleton-row {
-                    height: 30px;
+                    height: 32px;
                     opacity: 0.65;
                 }
             `;
@@ -153,19 +153,22 @@ function formatCellContent(val) {
 
     // Badges cho trạng thái phổ biến
     if (lowerVal === 'success' || lowerVal === 'done' || lowerVal === 'hoàn thành' || lowerVal === 'đạt' || lowerVal === 'active' || lowerVal === 'on') {
-        return `<span class="badge-success">${strVal}</span>`;
+        return `<span class="badge badge-success">✓ ${strVal}</span>`;
     }
     if (lowerVal === 'fail' || lowerVal === 'failed' || lowerVal === 'cancel' || lowerVal === 'hủy' || lowerVal === 'thất bại' || lowerVal === 'late' || lowerVal === 'off' || lowerVal === 'chưa đạt') {
-        return `<span class="badge-danger">${strVal}</span>`;
+        return `<span class="badge badge-danger">✕ ${strVal}</span>`;
     }
-    if (lowerVal === 'pending' || lowerVal === 'staging' || lowerVal === 'chờ xử lý' || lowerVal === 'đang xử lý' || lowerVal === 'warning') {
-        return `<span class="badge-warning">${strVal}</span>`;
+    if (lowerVal === 'pending' || lowerVal === 'chờ xử lý' || lowerVal === 'đang xử lý' || lowerVal === 'warning') {
+        return `<span class="badge badge-warning">⏳ ${strVal}</span>`;
     }
-    if (lowerVal === 'ch-replace' || lowerVal === 'info' || lowerVal === 'staging') {
-        return `<span class="badge-info">${strVal}</span>`;
+    if (lowerVal === 'staging' || lowerVal === 'info') {
+        return `<span class="badge badge-info">${strVal}</span>`;
+    }
+    if (lowerVal === 'none' || lowerVal === 'null' || lowerVal === 'n/a') {
+        return `<span class="badge badge-gray">${strVal}</span>`;
     }
 
-    // Định dạng số âm
+    // Định dạng số âm / số thông thường
     const numVal = Number(val);
     if (!isNaN(numVal) && typeof val !== 'boolean' && !isValidDate(strVal)) {
         if (numVal < 0) {
@@ -244,20 +247,31 @@ function renderTable() {
 
     const btnExcel = document.createElement('button');
     btnExcel.className = 'btn-excel';
-    btnExcel.innerHTML = `📊 Xuất Excel (${rawRows.length.toLocaleString('vi-VN')} dòng)`;
+    btnExcel.innerHTML = `
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="m15.5 15.5-1.4 1.4-2.1-2.1V19h-2v-4.2l-2.1 2.1-1.4-1.4 4.5-4.5 4.5 4.5z"/></svg>
+        <span>Xuất Excel (${rawRows.length.toLocaleString('vi-VN')} dòng)</span>
+    `;
     toolbarLeft.appendChild(btnExcel);
+
+    // Search Box with SVG Icon
+    const searchBox = document.createElement('div');
+    searchBox.className = 'search-box';
+    searchBox.innerHTML = `
+        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    `;
 
     const searchInput = document.createElement('input');
     searchInput.className = 'search-input';
     searchInput.type = 'text';
-    searchInput.placeholder = '🔍 Tìm kiếm nhanh...';
+    searchInput.placeholder = 'Tìm kiếm nhanh...';
     searchInput.value = tableState.searchQuery;
     searchInput.addEventListener('input', (e) => {
         tableState.searchQuery = e.target.value;
         tableState.currentPage = 1;
         renderTable();
     });
-    toolbarLeft.appendChild(searchInput);
+    searchBox.appendChild(searchInput);
+    toolbarLeft.appendChild(searchBox);
 
     toolbar.appendChild(toolbarLeft);
 
@@ -268,7 +282,10 @@ function renderTable() {
 
     const pageSelect = document.createElement('select');
     pageSelect.className = 'page-size-select';
-    [10, 25, 50, 100, -1].forEach(size => {
+    
+    // Thêm các lựa chọn bao gồm 10, 25, 50, 100, 250, 500, 1000, Tất cả (-1)
+    const sizeOptions = [10, 25, 50, 100, 250, 500, 1000, -1];
+    sizeOptions.forEach(size => {
         const opt = document.createElement('option');
         opt.value = size;
         opt.textContent = size === -1 ? 'Tất cả' : size;
@@ -337,7 +354,7 @@ function renderTable() {
                 const td = document.createElement('td');
                 const cellVal = row[colIndex];
                 
-                // Kiểm tra căn lề phải cho cột số
+                // Căn lề phải cho cột số
                 if (!isNaN(cellVal) && cellVal !== null && cellVal !== '' && typeof cellVal !== 'boolean' && !isValidDate(String(cellVal))) {
                     td.className = 'cell-number';
                 }
@@ -352,9 +369,10 @@ function renderTable() {
         const td = document.createElement('td');
         td.colSpan = headers.length || 1;
         td.style.textAlign = 'center';
-        td.style.padding = '30px';
-        td.style.color = '#9ca3af';
-        td.innerText = tableState.searchQuery ? 'Không tìm thấy dữ liệu phù hợp.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
+        td.style.padding = '40px 20px';
+        td.style.color = '#94a3b8';
+        td.style.fontSize = '14px';
+        td.innerText = tableState.searchQuery ? 'Không tìm thấy dữ liệu phù hợp với từ khóa.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
         tr.appendChild(td);
         tbody.appendChild(tr);
     }
@@ -392,7 +410,7 @@ function renderTable() {
         });
         paginationControls.appendChild(prevBtn);
 
-        // Hiển thị các nút số trang thông minh (max 5 trang xung quanh)
+        // Hiển thị số trang
         let startPage = Math.max(1, tableState.currentPage - 2);
         let endPage = Math.min(totalPages, startPage + 4);
         if (endPage - startPage < 4) {
@@ -409,7 +427,8 @@ function renderTable() {
             if (startPage > 2) {
                 const dots = document.createElement('span');
                 dots.textContent = '...';
-                dots.style.padding = '0 4px';
+                dots.style.color = '#94a3b8';
+                dots.style.padding = '0 2px';
                 paginationControls.appendChild(dots);
             }
         }
@@ -429,7 +448,8 @@ function renderTable() {
             if (endPage < totalPages - 1) {
                 const dots = document.createElement('span');
                 dots.textContent = '...';
-                dots.style.padding = '0 4px';
+                dots.style.color = '#94a3b8';
+                dots.style.padding = '0 2px';
                 paginationControls.appendChild(dots);
             }
             const lastPageBtn = document.createElement('button');
@@ -471,7 +491,6 @@ function renderTable() {
                 return;
             }
 
-            // Xuất toàn bộ sortedRows (toàn bộ dòng, đã sort)
             const rowsToExport = sortedRows.length > 0 ? sortedRows : rawRows;
 
             const excelData = rowsToExport.map(row => {
