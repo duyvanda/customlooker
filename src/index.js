@@ -90,6 +90,18 @@ if (document.readyState === 'loading') {
     showSkeleton();
 }
 
+// HÀM KIỂM TRA CHÍNH XÁC CÓ PHẢI LÀ SỐ THỰC SỰ KHÔNG (Tránh ép kiểu nhầm chuỗi text có chứa số)
+function isNumericValue(val) {
+    if (val === null || val === undefined) return false;
+    if (typeof val === 'number') return !isNaN(val);
+    if (typeof val === 'boolean') return false;
+    if (typeof val !== 'string') return false;
+    const s = val.trim();
+    if (s === '') return false;
+    // Chỉ chấp nhận chuỗi hoàn toàn là định dạng số nguyên hoặc thập phân
+    return /^-?\d+(\.\d+)?$/.test(s);
+}
+
 // HÀM KIỂM TRA ĐỊNH DẠNG NGÀY THÁNG
 function isValidDate(dateStr) {
     if (typeof dateStr !== 'string') return false;
@@ -163,11 +175,11 @@ function formatTableCell(val, colFmt = 'auto', colColor = 'default') {
 
     const str = String(val).trim();
     const lowerVal = str.toLowerCase();
+    const isNum = isNumericValue(val);
+    const num = isNum ? Number(val) : NaN;
 
     // 1. FORMAT GIÁ TRỊ (BƯỚC 1)
     let formattedVal = str;
-    const num = Number(str.replace(/[^0-9.-]/g, ''));
-    const isNum = !isNaN(num) && str !== '' && typeof val !== 'boolean' && !isValidDate(str);
 
     if (colFmt === 'monospace') {
         formattedVal = `<span class="font-mono">${str}</span>`;
@@ -234,10 +246,8 @@ function compareValues(a, b) {
     if (a === null || a === undefined || a === '') return 1;
     if (b === null || b === undefined || b === '') return -1;
 
-    const numA = Number(String(a).replace(/[^0-9.-]/g, ''));
-    const numB = Number(String(b).replace(/[^0-9.-]/g, ''));
-    if (!isNaN(numA) && !isNaN(numB) && typeof a !== 'boolean' && typeof b !== 'boolean' && !isValidDate(String(a)) && !isValidDate(String(b))) {
-        return numA - numB;
+    if (isNumericValue(a) && isNumericValue(b)) {
+        return Number(a) - Number(b);
     }
 
     if (isValidDate(String(a)) && isValidDate(String(b))) {
@@ -252,6 +262,8 @@ function extractDisplayFields(currentData) {
     const fields = currentData.fields || {};
     const allHeaders = (currentData.tables && currentData.tables.DEFAULT) ? currentData.tables.DEFAULT.headers : [];
     const displayFields = [];
+
+    const searchFieldIds = (fields.searchFields || []).map(sf => sf.id || sf.name);
 
     // 1. Lấy từ Dimensions
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
@@ -283,7 +295,6 @@ function extractDisplayFields(currentData) {
 
     // Fallback: nếu không có phân loại dimensions/metrics thì lấy allHeaders loại trừ searchFields
     if (displayFields.length === 0 && allHeaders.length > 0) {
-        const searchFieldIds = (fields.searchFields || []).map(sf => sf.id || sf.name);
         allHeaders.forEach((h, idx) => {
             if (!searchFieldIds.includes(h.id) && !searchFieldIds.includes(h.name)) {
                 displayFields.push({
@@ -321,22 +332,29 @@ function getMergedColumnConfigs(displayFields) {
         }));
     }
 
-    // Ghép giữa schema hiện tại và savedConfigs
+    // Ghép giữa schema hiện tại và savedConfigs CHỈ CHO NHỮNG FIELD NẰM TRONG displayFields
     const result = [];
+    const usedRawIndices = new Set();
+
     savedConfigs.forEach(sc => {
-        const matchedDf = displayFields.find(df => (df.id && df.id === sc.id) || df.name === sc.field);
+        const matchedDf = displayFields.find(df => 
+            !usedRawIndices.has(df.rawIndex) && ((df.id && df.id === sc.id) || df.name === sc.field)
+        );
         if (matchedDf) {
+            usedRawIndices.add(matchedDf.rawIndex);
             result.push({
                 ...sc,
+                id: matchedDf.id,
+                field: matchedDf.name,
                 rawIndex: matchedDf.rawIndex
             });
         }
     });
 
-    // Bổ sung các cột mới xuất hiện mà chưa có trong config cũ
+    // Bổ sung các cột mới xuất hiện trong displayFields mà chưa có trong config
     displayFields.forEach((df, idx) => {
-        const exists = result.some(r => r.rawIndex === df.rawIndex);
-        if (!exists) {
+        if (!usedRawIndices.has(df.rawIndex)) {
+            usedRawIndices.add(df.rawIndex);
             result.push({
                 id: df.id || `col_${idx}`,
                 field: df.name || df.id || `col_${idx}`,
@@ -434,7 +452,7 @@ function openColumnConfigModal() {
                     </table>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn-modal-reset" id="btn-reset-modal">Khôi phục mặc định</button>
+                    <button class="btn-modal-reset" id="btn-reset-modal" title="Xóa toàn bộ tùy chỉnh đã lưu và quay về mặc định">🔄 Khôi phục mặc định</button>
                     <div style="display:flex; gap:8px;">
                         <button class="btn-modal-reset" id="btn-cancel-modal">Hủy bỏ</button>
                         <button class="btn-modal-save" id="btn-save-modal">Lưu & Áp Dụng ✓</button>
@@ -500,12 +518,14 @@ function openColumnConfigModal() {
         });
 
         overlay.querySelector('#btn-reset-modal').onclick = () => {
-            if (confirm('Bạn có chắc muốn khôi phục lại cấu hình cột mặc định?')) {
+            try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
-                userColumnConfigs = getMergedColumnConfigs(displayFields);
-                overlay.remove();
-                renderTable();
+            } catch (e) {
+                console.warn('Clear localStorage error:', e);
             }
+            userColumnConfigs = null;
+            overlay.remove();
+            renderTable();
         };
 
         overlay.querySelector('#btn-save-modal').onclick = () => {
@@ -776,10 +796,9 @@ function renderTable() {
                 
                 // Smart Alignment
                 const isDate = isValidDate(String(rawVal)) || col.format.startsWith('date');
-                const isNumeric = (!isNaN(rawVal) && rawVal !== null && rawVal !== '' && typeof rawVal !== 'boolean' && !isDate)
-                    || ['number_comma', 'number_vn', 'currency', 'percent'].includes(col.format);
+                const isNum = isNumericValue(rawVal) || ['number_comma', 'number_vn', 'currency', 'percent'].includes(col.format);
 
-                if (isNumeric) {
+                if (isNum) {
                     td.className = 'align-right';
                 } else if (isDate) {
                     td.className = 'align-center';
