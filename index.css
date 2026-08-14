@@ -43,6 +43,7 @@ html, body {
     padding: 8px;
     box-sizing: border-box;
     background-color: var(--surface-bg);
+    position: relative;
 }
 
 .table-wrapper {
@@ -110,8 +111,8 @@ html, body {
     fill: currentColor;
 }
 
-/* COPY FILTER BUTTON */
-.btn-copy-filter {
+/* COPY DATA BUTTON */
+.btn-copy-data {
     background: #ffffff;
     color: #0369a1;
     border: 1px solid #7dd3fc;
@@ -129,10 +130,10 @@ html, body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.btn-copy-filter:hover {
+.btn-copy-data:hover {
     background: #f0f9ff;
     border-color: #0284c7;
-    color: #0284c7;
+    color: #0c4a6e;
 }
 
 /* COLUMN CONFIG BUTTON */
@@ -256,7 +257,7 @@ html, body {
     background: #64748b;
 }
 
-/* DATA TABLE BASE - CRISP, HIGH CONTRAST & CLEAR */
+/* DATA TABLE BASE */
 .preview-table {
     border-collapse: separate;
     border-spacing: 0;
@@ -292,6 +293,7 @@ html, body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    width: 100%;
 }
 
 .sort-icon {
@@ -309,6 +311,30 @@ html, body {
 .th-sorted .sort-icon {
     color: var(--primary);
     font-weight: 800;
+}
+
+/* HEADER COPY BUTTON */
+.btn-th-copy {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.4;
+    transition: all 0.15s ease;
+    margin-left: auto;
+}
+
+.preview-table th:hover .btn-th-copy {
+    opacity: 0.85;
+}
+
+.btn-th-copy:hover {
+    opacity: 1 !important;
+    background: #e0f2fe;
+    color: #0284c7;
+    transform: scale(1.15);
 }
 
 .preview-table td {
@@ -566,30 +592,7 @@ tbody tr:hover td.frozen-column {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* TOAST NOTIFICATION */
-.toast-msg {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: #0f172a;
-    color: #ffffff;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    z-index: 999999;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    animation: fadeInToast 0.2s ease;
-}
-@keyframes fadeInToast {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* MODAL TÙY CHỈNH CỘT */
+/* MODAL TÙY CHỈNH CỘT / COPY DATA */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -609,7 +612,7 @@ tbody tr:hover td.frozen-column {
     background: #ffffff;
     border-radius: 8px;
     width: 94vw;
-    max-width: 520px;
+    max-width: 540px;
     max-height: 96vh;
     margin-top: 20px;
     display: flex;
@@ -708,24 +711,6 @@ tbody tr:hover td.frozen-column {
     background: var(--primary-hover);
 }
 
-.btn-modal-blue {
-    background: #0284c7;
-    color: #ffffff;
-    border: none;
-    padding: 7px 18px;
-    border-radius: 6px;
-    font-size: 12.5px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.btn-modal-blue:hover {
-    background: #0369a1;
-}
-
 .btn-modal-reset {
     background: #ffffff;
     border: 1px solid #94a3b8;
@@ -743,4 +728,29 @@ tbody tr:hover td.frozen-column {
     background: #fee2e2;
     color: var(--accent-red);
     border-color: #fca5a5;
+}
+
+/* FLOATING TOAST NOTIFICATION */
+.viz-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #0f172a;
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: toastSlideUp 0.2s ease forwards;
+    border: 1px solid #334155;
+}
+
+@keyframes toastSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
