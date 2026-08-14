@@ -2,8 +2,8 @@
 import * as dscc from '@google/dscc';
 
 // Khóa lưu trữ cấu hình cột và quy tắc màu trên localStorage
-const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v4';
-const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v4';
+const USER_CONFIG_STORAGE_KEY = 'user_tbl_cols_looker_custom_v5';
+const USER_RULES_STORAGE_KEY = 'user_tbl_rules_looker_custom_v5';
 
 // Biến trạng thái toàn cục
 let firstRender = true;
@@ -169,66 +169,6 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM PARSER QUY TẮC ĐỘNG TỪ STYLE PANEL (ADMIN DSL: Cột = Giá trị : Kiểu, Cột contain TừKhóa : Kiểu, hoặc > 1000 : green)
-function parseDslRules(text) {
-    if (!text || typeof text !== 'string' || text.trim() === '') return [];
-    const lines = text.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
-    const rules = [];
-
-    lines.forEach(line => {
-        const parts = line.split(':');
-        if (parts.length < 2) return;
-
-        const left = parts[0].trim();
-        const rawStyle = parts.slice(1).join(':').trim().toLowerCase();
-
-        let style = 'badge_info';
-        if (rawStyle.includes('red') || rawStyle.includes('danger') || rawStyle.includes('đỏ')) {
-            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_danger' : 'color_red';
-        } else if (rawStyle.includes('green') || rawStyle.includes('success') || rawStyle.includes('xanh lá')) {
-            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_success' : 'color_green';
-        } else if (rawStyle.includes('yellow') || rawStyle.includes('warn') || rawStyle.includes('amber') || rawStyle.includes('vàng')) {
-            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_warning' : 'color_amber';
-        } else if (rawStyle.includes('blue') || rawStyle.includes('cyan') || rawStyle.includes('info') || rawStyle.includes('dương')) {
-            style = rawStyle.includes('badge') || !rawStyle.includes('color') ? 'badge_info' : 'color_cyan';
-        } else if (rawStyle.includes('gray') || rawStyle.includes('xám')) {
-            style = 'badge_gray';
-        } else if (rawStyle.includes('pos_neg')) {
-            style = 'color_pos_neg';
-        }
-
-        // Case 1: [Field] [>= | <= | > | < | = | == | contain | contains | startswith | startsWith] [Value]
-        const matchFull = left.match(/^([a-zA-Z0-9_\s\u00C0-\u024F\u1EA0-\u1EF9]+?)\s*(>=|<=|>|<|==|=|contain|contains|startswith|startsWith)\s*(.*)$/i);
-        if (matchFull) {
-            const field = matchFull[1].trim();
-            let op = matchFull[2].toLowerCase();
-            const val = matchFull[3].trim();
-            if (op === '=' || op === '==') op = 'equals';
-            if (op === 'contain' || op === 'contains') op = 'contains';
-            if (op === 'startswith') op = 'startsWith';
-
-            rules.push({ field, operator: op, value: val, style });
-            return;
-        }
-
-        // Case 2: [>= | <= | > | < | contain | contains | startswith] [Value] (Áp dụng cho tất cả cột *)
-        const matchOpOnly = left.match(/^(>=|<=|>|<|contain|contains|startswith)\s*(.*)$/i);
-        if (matchOpOnly) {
-            let op = matchOpOnly[1].toLowerCase();
-            if (op === 'contain' || op === 'contains') op = 'contains';
-            if (op === 'startswith') op = 'startsWith';
-
-            rules.push({ field: '*', operator: op, value: matchOpOnly[2].trim(), style });
-            return;
-        }
-
-        // Case 3: [Value] (mặc định equals hoặc contains cho mọi cột)
-        rules.push({ field: '*', operator: 'contains', value: left, style });
-    });
-
-    return rules;
-}
-
 // HÀM ĐÁNH GIÁ VÀ ÁP DỤNG QUY TẮC ĐIỀU KIỆN ĐỘNG
 function evaluateAllRules(fieldName, val, allRules) {
     if (!allRules || !Array.isArray(allRules) || allRules.length === 0) return null;
@@ -240,7 +180,6 @@ function evaluateAllRules(fieldName, val, allRules) {
     const num = isNum ? Number(val) : NaN;
 
     for (const rule of allRules) {
-        // Kiểm tra đúng cột áp dụng hoặc tất cả cột (*)
         if (rule.field !== '*' && rule.field.toLowerCase() !== fieldName.toLowerCase()) {
             continue;
         }
@@ -277,7 +216,7 @@ function evaluateAllRules(fieldName, val, allRules) {
 }
 
 // HÀM FORMAT CELL TOÀN DIỆN
-function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', allRules = [], highlightPosNeg = false) {
+function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', allRules = []) {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
@@ -337,14 +276,7 @@ function formatTableCell(fieldName, val, colFmt = 'auto', colColor = 'default', 
         }
     }
 
-    // 3. TÔ MÀU SỐ DƯƠNG / SỐ ÂM TỰ ĐỘNG
-    if (highlightPosNeg && isNum) {
-        return num >= 0
-            ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
-            : `<span class="color-pos-neg-neg">${formattedVal}</span>`;
-    }
-
-    // 4. MÀU CỘT CỐ ĐỊNH (Nếu chọn trong Modal)
+    // 3. MÀU CỘT CỐ ĐỊNH (Nếu chọn trong Modal)
     if (colColor === 'pos_green_neg_red' && isNum) {
         return num >= 0
             ? `<span class="color-pos-neg-pos">${formattedVal}</span>`
@@ -583,7 +515,7 @@ function openColumnConfigModal() {
                     ` : `
                         <div>
                             <div style="font-size:12px; color:#64748b; margin-bottom:10px;">
-                                💡 Thiết lập quy tắc điều kiện động (<strong>chứa từ khóa, bằng, lớn hơn, nhỏ hơn, số âm/dương</strong>) để tự động đổi màu chữ hoặc gắn Thẻ Badge.
+                                💡 Thiết lập quy tắc điều kiện động (<strong>chứa từ khóa, bằng, lớn hơn, nhỏ hơn, số âm/dương</strong>) để tự động đổi màu chữ hoặc gắn Thẻ Badge cho bất kỳ cột nào.
                             </div>
                             <table class="col-config-table">
                                 <thead>
@@ -755,6 +687,7 @@ function openColumnConfigModal() {
             });
         }
 
+        // Reset toàn bộ về mặc định
         overlay.querySelector('#btn-reset-modal').onclick = () => {
             try {
                 localStorage.removeItem(USER_CONFIG_STORAGE_KEY);
@@ -766,6 +699,7 @@ function openColumnConfigModal() {
             renderTable();
         };
 
+        // Lưu & Áp Dụng
         overlay.querySelector('#btn-save-modal').onclick = () => {
             syncInputsBeforeMove();
             userColumnConfigs = workingConfigs;
@@ -803,14 +737,11 @@ function renderTable() {
     const textWrap = styleConfig.textWrap?.value === true;
     const showSearch = styleConfig.showSearch?.value !== false;
     const showColConfig = styleConfig.showColConfig?.value !== false;
-    const highlightPosNeg = styleConfig.highlightPosNeg?.value === true;
 
-    // Tổng hợp quy tắc động từ Style Panel (Admin DSL) và Modal (User Config)
-    const adminDslRules = parseDslRules(styleConfig.customRulesText?.value);
+    // Lấy danh sách quy tắc điều kiện động từ Modal (LocalStorage)
     if (!userConditionalRules) {
         userConditionalRules = loadStoredRules();
     }
-    const combinedRules = [...adminDslRules, ...userConditionalRules];
 
     // ĐỒNG BỘ DEFAULT PAGE SIZE TỪ ADMIN SETUP
     const adminDefaultPageSize = (styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined)
@@ -1069,7 +1000,7 @@ function renderTable() {
                 if (textWrap) td.classList.add('text-wrap-cell');
 
                 // Áp dụng định dạng và các quy tắc động > < = contain
-                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, combinedRules, highlightPosNeg);
+                td.innerHTML = formatTableCell(col.field, rawVal, col.format, col.color, userConditionalRules);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);

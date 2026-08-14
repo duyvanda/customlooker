@@ -37,7 +37,7 @@
     "style": [
         {
             "id": "tableAppearance",
-            "label": "Cài đặt Bảng (Admin Configuration)",
+            "label": "Giao diện Bảng",
             "elements": [
                 {
                     "id": "defaultPageSize",
@@ -52,8 +52,8 @@
                         { "label": "100 dòng/trang", "value": "100" },
                         { "label": "250 dòng/trang", "value": "250" },
                         { "label": "500 dòng/trang", "value": "500" },
-                        { "label": "1000 dòng/trang (Xem tối đa)", "value": "1000" },
-                        { "label": "Tất cả dòng (Không phân trang)", "value": "-1" }
+                        { "label": "1000 dòng/trang", "value": "1000" },
+                        { "label": "Tất cả dòng", "value": "-1" }
                     ]
                 },
                 {
@@ -100,24 +100,6 @@
                 {
                     "id": "textWrap",
                     "label": "Tự động ngắt dòng (Text Wrap)",
-                    "type": "CHECKBOX",
-                    "defaultValue": false
-                }
-            ]
-        },
-        {
-            "id": "conditionalFormattingSection",
-            "label": "🎨 Điều Kiện Tô Màu & Badge Động (Rules)",
-            "elements": [
-                {
-                    "id": "customRulesText",
-                    "label": "Quy tắc động (Cú pháp: Cột = Giá trị : Màu/Badge, hoặc > 1000 : green)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
-                },
-                {
-                    "id": "highlightPosNeg",
-                    "label": "Tô màu số liệu: Dương Xanh / Âm Đỏ",
                     "type": "CHECKBOX",
                     "defaultValue": false
                 }
