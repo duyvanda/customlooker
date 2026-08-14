@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xuất File Excel & Bộ Lọc</title>
+    <title>Xuất File Excel</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -23,7 +23,7 @@
             background: #ffffff;
             border-radius: 16px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            max-width: 680px;
+            max-width: 640px;
             width: 100%;
             padding: 32px;
             border: 1px solid #e2e8f0;
@@ -94,13 +94,6 @@
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
         .btn-blue:hover { background: #0369a1; }
-
-        .btn-purple {
-            background: #6366f1;
-            color: #ffffff;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-        }
-        .btn-purple:hover { background: #4f46e5; }
         
         .info-grid {
             display: grid;
@@ -118,7 +111,7 @@
         .info-val { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px; }
         .info-filename { font-size: 12.5px; font-weight: 600; color: #0f172a; margin-top: 3px; word-break: break-word; }
 
-        /* FILTER PARAMS SECTION */
+        /* RAW FILTER PARAMS SECTION */
         .filter-section {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
@@ -141,7 +134,7 @@
         }
         .filter-textarea {
             width: 100%;
-            height: 120px;
+            height: 90px;
             background: #ffffff;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
@@ -188,8 +181,7 @@
 
     <div class="action-bar" id="actionBar" style="display: none;">
         <button class="btn btn-green" id="btnDownloadExcel">📥 Tải Lại Excel (.xlsx)</button>
-        <button class="btn btn-blue" id="btnCopyFilterJson">📋 Copy JSON Bộ Lọc</button>
-        <button class="btn btn-purple" id="btnCopyFilterText">📝 Copy Text Bộ Lọc</button>
+        <button class="btn btn-blue" id="btnCopyFilterJson">📋 Copy JSON Date Range</button>
     </div>
 
     <div class="info-grid" id="infoGrid" style="display: none;">
@@ -210,13 +202,13 @@
     <div class="filter-section" id="filterSection" style="display: none;">
         <div class="filter-header">
             <div class="filter-title">
-                <span>🎯 Giá trị các phần lọc (startDate, endDate, Dimension values)</span>
+                <span>📅 Date Range nguyên bản từ Looker Studio API</span>
             </div>
             <button id="btnQuickCopyFilter" style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
                 📋 Copy
             </button>
         </div>
-        <textarea class="filter-textarea" id="filterPreview" readonly placeholder="Thông tin bộ lọc đang được tổng hợp..."></textarea>
+        <textarea class="filter-textarea" id="filterPreview" readonly placeholder="Date range đang được trích xuất..."></textarea>
     </div>
 </div>
 
@@ -314,37 +306,9 @@
         return JSON.stringify(globalData.filterInfo, null, 2);
     }
 
-    function getFilterInfoTextString() {
-        if (!globalData || !globalData.filterInfo) return '';
-        const fi = globalData.filterInfo;
-        const parts = [];
-
-        if (fi.dateRange) {
-            if (fi.dateRange.startDate && fi.dateRange.endDate) {
-                parts.push(`startdate=${fi.dateRange.startDate} and enddate=${fi.dateRange.endDate}`);
-            } else if (fi.dateRange.startDate) {
-                parts.push(`startdate=${fi.dateRange.startDate}`);
-            }
-        }
-
-        if (fi.searchKeyword) {
-            parts.push(`search="${fi.searchKeyword}"`);
-        }
-
-        if (fi.dimensions && typeof fi.dimensions === 'object') {
-            Object.entries(fi.dimensions).forEach(([dimName, vals]) => {
-                if (Array.isArray(vals) && vals.length > 0) {
-                    parts.push(`${dimName}=${vals.join(',')}`);
-                }
-            });
-        }
-
-        return parts.join(' and ');
-    }
-
     function copyToClipboard(text, successMsg) {
         if (!text) {
-            showToast('Không có thông tin bộ lọc để copy!');
+            showToast('Không có thông tin date range để copy!');
             return;
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -366,7 +330,7 @@
             document.execCommand('copy');
             showToast(successMsg || '✓ Đã copy vào clipboard!');
         } else {
-            prompt('Copy thông tin bộ lọc:', text);
+            prompt('Copy Date Range JSON:', text);
         }
     }
 
@@ -394,7 +358,7 @@
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
         document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
         document.getElementById('subtitle').textContent = success 
-            ? 'File Excel đã lưu vào máy. Bạn có thể copy nhanh giá trị bộ lọc bên dưới.'
+            ? 'File Excel đã lưu vào máy. Bạn có thể copy Date Range nguyên bản bên dưới.'
             : 'Vui lòng bấm nút Tải Lại Excel bên dưới.';
 
         document.getElementById('actionBar').style.display = 'flex';
@@ -422,21 +386,15 @@
         showToast('📥 Đang tải file Excel (.xlsx)...');
     });
 
-    // Nút Copy JSON Bộ Lọc
+    // Nút Copy JSON Date Range
     document.getElementById('btnCopyFilterJson').addEventListener('click', () => {
         const jsonStr = getFilterInfoJsonString();
-        copyToClipboard(jsonStr, '✓ Đã copy JSON giá trị bộ lọc!');
-    });
-
-    // Nút Copy Text Bộ Lọc
-    document.getElementById('btnCopyFilterText').addEventListener('click', () => {
-        const textStr = getFilterInfoTextString();
-        copyToClipboard(textStr, '✓ Đã copy text giá trị bộ lọc!');
+        copyToClipboard(jsonStr, '✓ Đã copy JSON Date Range nguyên bản!');
     });
 
     document.getElementById('btnQuickCopyFilter').addEventListener('click', () => {
         const jsonStr = getFilterInfoJsonString();
-        copyToClipboard(jsonStr, '✓ Đã copy JSON giá trị bộ lọc!');
+        copyToClipboard(jsonStr, '✓ Đã copy JSON Date Range nguyên bản!');
     });
 </script>
 </body>

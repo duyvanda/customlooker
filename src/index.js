@@ -227,57 +227,12 @@ function formatDateValue(val, fmtStyle = 'date') {
     return str;
 }
 
-// HÀM TRÍCH XUẤT THÔNG TIN CÁC PHẦN LỌC HIỆN TẠI (DateRange, Search, Dimension Values)
-function extractActiveFilterInfo(currentData, activeRows, runtimeState) {
+// HÀM TRÍCH XUẤT THÔNG TIN DATE RANGE NGUYÊN BẢN TỪ LOOKER STUDIO API
+function extractActiveFilterInfo(currentData) {
     const filterInfo = {};
-
-    // 1. Date Range từ Looker Studio
-    if (currentData && currentData.dateRanges) {
-        const defaultDr = currentData.dateRanges.DEFAULT;
-        if (defaultDr) {
-            const s = defaultDr.start ? formatDateValue(defaultDr.start, 'date_yymmdd') : null;
-            const e = defaultDr.end ? formatDateValue(defaultDr.end, 'date_yymmdd') : null;
-            filterInfo.dateRange = {
-                startDate: s || defaultDr.start || null,
-                endDate: e || defaultDr.end || null
-            };
-        }
+    if (currentData && currentData.dateRanges && currentData.dateRanges.DEFAULT) {
+        filterInfo.dateRange = currentData.dateRanges.DEFAULT;
     }
-
-    // 2. Search keyword (nếu có)
-    if (runtimeState && runtimeState.searchText && runtimeState.searchText.trim() !== '') {
-        filterInfo.searchKeyword = runtimeState.searchText.trim();
-    }
-
-    // 3. Chỉ lấy các Dimension được chỉ định làm trường lọc (Ưu tiên từ Search Dimension trong Setup)
-    const fields = currentData ? (currentData.fields || {}) : {};
-    const targetFilterFields = (Array.isArray(fields.searchFields) && fields.searchFields.length > 0)
-        ? fields.searchFields
-        : (Array.isArray(fields.dimensions) ? fields.dimensions.slice(0, 1) : []);
-
-    const allHeaders = (currentData && currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
-        ? currentData.tables.DEFAULT.headers
-        : [];
-
-    const dimensionValues = {};
-    targetFilterFields.forEach(dim => {
-        if (!dim) return;
-        const rawIdx = findRawIndexForField(dim, allHeaders);
-        if (rawIdx !== -1) {
-            const uniqueVals = Array.from(new Set(
-                activeRows
-                    .map(r => r ? r[rawIdx] : null)
-                    .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
-                    .map(v => String(v).trim())
-            ));
-            dimensionValues[dim.name || dim.id] = uniqueVals;
-        }
-    });
-
-    if (Object.keys(dimensionValues).length > 0) {
-        filterInfo.dimensions = dimensionValues;
-    }
-
     return filterInfo;
 }
 
@@ -1241,7 +1196,7 @@ function renderTable() {
 
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
-                const filterInfo = extractActiveFilterInfo(currentData, rowsToExport, runtimeState);
+                const filterInfo = extractActiveFilterInfo(currentData);
 
                 downloadViaHelper({
                     type: 'EXCEL_DOWNLOAD',
