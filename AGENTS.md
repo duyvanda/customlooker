@@ -76,3 +76,20 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-re
 - Mỗi phiên làm việc phải tạo/cập nhật 1 file walkthrough tại `changelog/yyyymmdd_hhmmss_walkthrough.md`.
 - **CHỈ deploy và sử dụng git khi được User yêu cầu rõ ràng.**
 - Khi commit git, commit message luôn viết bằng tiếng Việt.
+
+---
+
+## 6. 📐 Lưu Ý Kỹ Thuật: Bounding Box & Iframe Resize Performance
+
+1. **Bản chất Bounding Box trong Looker Studio:**
+   - **Bounding Box** (khung viền xanh có các núm kéo kích thước *Resize Handles*) là thành phần giao diện của Looker Studio (trang cha).
+   - Biểu đồ Custom Viz chạy hoàn toàn bên trong một thẻ **`<iframe>`** độc lập (trang con).
+2. **Nguyên nhân gây giật/khựng khi kéo dài Bounding Box:**
+   - Khi người dùng kéo núm Bounding Box, nếu con trỏ chuột lướt vào phạm vi `<iframe>`, trình duyệt sẽ chuyển quyền bắt sự kiện chuột (`pointer-events`) sang iframe, làm Looker Studio mất dấu chuột dẫn đến Bounding Box bị khựng/lag.
+   - Looker Studio gửi sự kiện `RENDER` liên tục ở tần số cao (30-60 lần/giây) khi Bounding Box thay đổi kích thước.
+3. **Quy tắc bắt buộc trong Code để chống Lag:**
+   - **Batching với `requestAnimationFrame` (RAF):** Cả `drawVisualization` và `ResizeObserver` đều **bắt buộc** phải bọc qua RAF để gom các lần render theo tần số quét màn hình, tránh re-render và re-sort dữ liệu lớn liên tục.
+   - **CSS 100% Container Fit:** `.table-wrapper` và `#excelviz-app-root` luôn phải để `width: 100%; height: 100%; overflow: hidden;` (không dùng `100vh`) để khớp chính xác 100% với kích thước iframe do Bounding Box cấp.
+4. **Mẹo hỗ trợ User khi cần chỉnh kích thước:**
+   - **Sync nhanh không cần kéo:** Chọn biểu đồ mẫu + bảng Custom Viz -> Chuột phải -> **Make same size (Kích thước phù hợp)** -> **Height (Chiều cao)**.
+   - **Kéo góc:** Kéo núm vuông ở góc dưới bên phải thay vì núm ở giữa cạnh đáy để hạn chế chuột lọt vào lòng iframe.
