@@ -869,7 +869,7 @@ function renderTable() {
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
         const fontSize = Number((styleConfig.fontSize && styleConfig.fontSize.value) || '13');
-        const showSTT = styleConfig.showSTT ? styleConfig.showSTT.value === true : false;
+        const showSTT = styleConfig.showSTT && styleConfig.showSTT.value !== undefined ? styleConfig.showSTT.value === true : true;
         const textWrap = styleConfig.textWrap ? styleConfig.textWrap.value === true : false;
         const showSearch = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
         const showColPopup = styleConfig.showColPopup ? styleConfig.showColPopup.value !== false : true;
@@ -990,6 +990,10 @@ function renderTable() {
 
         const wrapper = document.createElement('div');
         wrapper.className = 'table-wrapper';
+        wrapper.style.setProperty('--app-font-size', `${fontSize}px`);
+        if (appRoot) {
+            appRoot.style.setProperty('--app-font-size', `${fontSize}px`);
+        }
 
         // CẢNH BÁO CẤU HÌNH KHÔNG HỢP LỆ (NẾU CÓ)
         if (configWarnings.length > 0) {
@@ -1123,16 +1127,36 @@ function renderTable() {
         const toolbarLeft = document.createElement('div');
         toolbarLeft.className = 'toolbar-left';
 
+        // Nút Popup Ẩn/Hiện Cột (Bánh răng cài đặt đặt đầu tiên)
+        if (showColPopup) {
+            const btnColPopup = document.createElement('button');
+            btnColPopup.className = 'btn-col-config';
+            btnColPopup.title = `Tùy chỉnh cột hiển thị (${visibleColumns.length}/${tableColumns.length})`;
+            btnColPopup.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span>(${visibleColumns.length}/${tableColumns.length})</span>
+            `;
+            btnColPopup.onclick = () => openRuntimeColumnsPopup(tableColumns);
+            toolbarLeft.appendChild(btnColPopup);
+        }
+
         // Nút Xuất Excel (Cảnh báo đỏ nếu >200k dòng)
         if (showExcelExport) {
             const isHeavyExcel = totalRows > 200000;
             const btnExcel = document.createElement('button');
             btnExcel.className = `btn-excel ${isHeavyExcel ? 'btn-excel-danger' : ''}`;
             btnExcel.id = 'btn-main-excel-export';
-            const excelLabel = isHeavyExcel ? 'Xuất Excel (>200k)' : 'Xuất Excel (<200k)';
-            btnExcel.title = isHeavyExcel ? 'Cảnh báo: Dữ liệu lớn trên 200k dòng có thể gây chậm hoặc đơ trình duyệt. Khuyên dùng nút Xuất CSV.' : 'Xuất file Excel .xlsx';
+            const excelLabel = isHeavyExcel ? 'Excel (>200k)' : 'Excel (<200k)';
+            btnExcel.title = isHeavyExcel ? 'Cảnh báo: Dữ liệu lớn trên 200k dòng có thể gây chậm hoặc đơ trình duyệt. Khuyên dùng nút CSV.' : 'Xuất file Excel .xlsx';
             btnExcel.innerHTML = `
-                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="m15.5 15.5-1.4 1.4-2.1-2.1V19h-2v-4.2l-2.1 2.1-1.4-1.4 4.5-4.5 4.5 4.5z"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
                 <span>${excelLabel}</span>
             `;
             btnExcel.addEventListener('click', handleExportExcel);
@@ -1144,21 +1168,17 @@ function renderTable() {
             const btnCsv = document.createElement('button');
             btnCsv.className = 'btn-csv';
             btnCsv.id = 'btn-main-csv-export';
+            btnCsv.title = 'Xuất file CSV .csv';
             btnCsv.innerHTML = `
-                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="M10 13H8v-2h2v2zm4 0h-2v-2h2v2zm-4 4H8v-2h2v2zm4 0h-2v-2h2v2z"/></svg>
-                <span>Xuất CSV</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>CSV</span>
             `;
             btnCsv.addEventListener('click', handleExportCsv);
             toolbarLeft.appendChild(btnCsv);
-        }
-
-        // Nút Popup Ẩn/Hiện Cột
-        if (showColPopup) {
-            const btnColPopup = document.createElement('button');
-            btnColPopup.className = 'btn-col-config';
-            btnColPopup.innerHTML = `<span>👁️ Cột hiển thị (${visibleColumns.length}/${tableColumns.length})</span>`;
-            btnColPopup.onclick = () => openRuntimeColumnsPopup(tableColumns);
-            toolbarLeft.appendChild(btnColPopup);
         }
 
         // Ô Tìm kiếm (Chỉ hiện khi có chọn searchFields ở Setup)
@@ -1374,7 +1394,7 @@ function renderTable() {
             td.style.textAlign = 'center';
             td.style.padding = '40px 20px';
             td.style.color = '#94a3b8';
-            td.style.fontSize = '13px';
+            td.style.fontSize = `${fontSize}px`;
             td.innerText = (canSearch && runtimeState.searchText) ? 'Không tìm thấy dữ liệu phù hợp với từ khóa.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
             tr.appendChild(td);
             tbody.appendChild(tr);
@@ -1390,20 +1410,21 @@ function renderTable() {
         const pageInfo = document.createElement('div');
         pageInfo.className = 'pagination-info';
         if (totalRows > 0) {
-            pageInfo.textContent = `Hiển thị ${startIdx + 1}–${endIdx} trên tổng số ${totalRows.toLocaleString('vi-VN')} dòng`;
+            const sizeLabel = pageSize === -1 ? 'Tất cả' : `${pageSize} dòng/trang`;
+            pageInfo.textContent = `Hiển thị ${startIdx + 1} - ${endIdx} trên ${totalRows.toLocaleString('vi-VN')} dòng (${sizeLabel})`;
         } else {
             pageInfo.textContent = '0 dòng';
         }
         paginationFooter.appendChild(pageInfo);
 
-        const paginationControls = document.createElement('div');
-        paginationControls.className = 'pagination-controls';
-
         if (totalPages > 1 && pageSize !== -1) {
+            const paginationControls = document.createElement('div');
+            paginationControls.className = 'pagination-controls';
+
             const prevBtn = document.createElement('button');
-            prevBtn.className = 'page-btn';
-            prevBtn.textContent = '‹ Trước';
-            prevBtn.disabled = runtimeState.currentPage === 1;
+            prevBtn.className = 'page-btn page-btn-prev';
+            prevBtn.innerHTML = '❮ Trước';
+            prevBtn.disabled = runtimeState.currentPage <= 1;
             prevBtn.addEventListener('click', () => {
                 if (runtimeState.currentPage > 1) {
                     runtimeState.currentPage--;
@@ -1412,58 +1433,15 @@ function renderTable() {
             });
             paginationControls.appendChild(prevBtn);
 
-            let startPage = Math.max(1, runtimeState.currentPage - 2);
-            let endPage = Math.min(totalPages, startPage + 4);
-            if (endPage - startPage < 4) {
-                startPage = Math.max(1, endPage - 4);
-            }
-
-            if (startPage > 1) {
-                const firstPageBtn = document.createElement('button');
-                firstPageBtn.className = 'page-btn';
-                firstPageBtn.textContent = '1';
-                firstPageBtn.addEventListener('click', () => { runtimeState.currentPage = 1; renderTable(); });
-                paginationControls.appendChild(firstPageBtn);
-
-                if (startPage > 2) {
-                    const dots = document.createElement('span');
-                    dots.textContent = '...';
-                    dots.style.color = '#94a3b8';
-                    dots.style.padding = '0 2px';
-                    paginationControls.appendChild(dots);
-                }
-            }
-
-            for (let p = startPage; p <= endPage; p++) {
-                const pBtn = document.createElement('button');
-                pBtn.className = `page-btn ${p === runtimeState.currentPage ? 'active' : ''}`;
-                pBtn.textContent = p;
-                pBtn.addEventListener('click', () => {
-                    runtimeState.currentPage = p;
-                    renderTable();
-                });
-                paginationControls.appendChild(pBtn);
-            }
-
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    const dots = document.createElement('span');
-                    dots.textContent = '...';
-                    dots.style.color = '#94a3b8';
-                    dots.style.padding = '0 2px';
-                    paginationControls.appendChild(dots);
-                }
-                const lastPageBtn = document.createElement('button');
-                lastPageBtn.className = 'page-btn';
-                lastPageBtn.textContent = totalPages;
-                lastPageBtn.addEventListener('click', () => { runtimeState.currentPage = totalPages; renderTable(); });
-                paginationControls.appendChild(lastPageBtn);
-            }
+            const pageIndicator = document.createElement('span');
+            pageIndicator.className = 'page-indicator';
+            pageIndicator.textContent = `Trang ${runtimeState.currentPage} / ${totalPages}`;
+            paginationControls.appendChild(pageIndicator);
 
             const nextBtn = document.createElement('button');
-            nextBtn.className = 'page-btn';
-            nextBtn.textContent = 'Sau ›';
-            nextBtn.disabled = runtimeState.currentPage === totalPages;
+            nextBtn.className = 'page-btn page-btn-next';
+            nextBtn.innerHTML = 'Sau ❯';
+            nextBtn.disabled = runtimeState.currentPage >= totalPages;
             nextBtn.addEventListener('click', () => {
                 if (runtimeState.currentPage < totalPages) {
                     runtimeState.currentPage++;
@@ -1471,9 +1449,10 @@ function renderTable() {
                 }
             });
             paginationControls.appendChild(nextBtn);
+
+            paginationFooter.appendChild(paginationControls);
         }
 
-        paginationFooter.appendChild(paginationControls);
         wrapper.appendChild(paginationFooter);
 
         appRoot.appendChild(wrapper);

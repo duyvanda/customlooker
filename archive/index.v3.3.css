@@ -135,10 +135,9 @@ html, body {
 }
 
 .btn-excel svg {
-    width: calc(var(--app-font-size, 13px) + 2px);
-    height: calc(var(--app-font-size, 13px) + 2px);
-    stroke: currentColor;
-    flex-shrink: 0;
+    width: calc(var(--app-font-size, 13px) + 1px);
+    height: calc(var(--app-font-size, 13px) + 1px);
+    fill: currentColor;
 }
 
 /* CSV BUTTON */
@@ -166,10 +165,9 @@ html, body {
 }
 
 .btn-csv svg {
-    width: calc(var(--app-font-size, 13px) + 2px);
-    height: calc(var(--app-font-size, 13px) + 2px);
-    stroke: currentColor;
-    flex-shrink: 0;
+    width: calc(var(--app-font-size, 13px) + 1px);
+    height: calc(var(--app-font-size, 13px) + 1px);
+    fill: currentColor;
 }
 
 /* COLUMN CONFIG BUTTON */
@@ -195,13 +193,6 @@ html, body {
     background: #f8fafc;
     border-color: #94a3b8;
     color: #000000;
-}
-
-.btn-col-config svg {
-    width: calc(var(--app-font-size, 13px) + 2px);
-    height: calc(var(--app-font-size, 13px) + 2px);
-    stroke: currentColor;
-    flex-shrink: 0;
 }
 
 /* SEARCH INPUT WITH CLEAR BUTTON */

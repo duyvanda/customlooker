@@ -12,9 +12,9 @@
             "description": "Kéo thả dimension và metric để tạo bảng dữ liệu có nút Export Excel.",
             "iconUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/table.png",
             "resource": {
-                "js": "gs://analytics_merap/excelchart3/index.bundle.v3.2.js",
-                "css": "gs://analytics_merap/excelchart3/index.v3.2.css",
-                "config": "gs://analytics_merap/excelchart3/index.v3.2.json"
+                "js": "gs://analytics_merap/excelchart3/index.bundle.v3.7.js",
+                "css": "gs://analytics_merap/excelchart3/index.v3.7.css",
+                "config": "gs://analytics_merap/excelchart3/index.v3.7.json"
             }
         }
     ],

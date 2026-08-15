@@ -96,7 +96,7 @@
                 },
                 {
                     "id": "rule1Dimension",
-                    "label": "Rule Format 1 Dimension",
+                    "label": "Rule 1 Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -105,7 +105,7 @@
                 },
                 {
                     "id": "rule1Metric",
-                    "label": "Rule Format 1 Metric",
+                    "label": "Rule 1 Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
@@ -114,7 +114,7 @@
                 },
                 {
                     "id": "rule2Dimension",
-                    "label": "Rule Format 2 Dimension",
+                    "label": "Rule 2 Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -123,7 +123,7 @@
                 },
                 {
                     "id": "rule2Metric",
-                    "label": "Rule Format 2 Metric",
+                    "label": "Rule 2 Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
@@ -132,7 +132,7 @@
                 },
                 {
                     "id": "rule3Dimension",
-                    "label": "Rule Format 3 Dimension",
+                    "label": "Rule 3 Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
@@ -141,7 +141,7 @@
                 },
                 {
                     "id": "rule3Metric",
-                    "label": "Rule Format 3 Metric",
+                    "label": "Rule 3 Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
@@ -267,7 +267,7 @@
                     "id": "showSTT",
                     "label": "Hiển thị cột STT (Số thứ tự)",
                     "type": "CHECKBOX",
-                    "defaultValue": true
+                    "defaultValue": false
                 },
                 {
                     "id": "textWrap",
@@ -671,11 +671,11 @@
         },
         {
             "id": "rule1Section",
-            "label": "🎨 Tô Màu & Badge — Rule Format 1",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 1",
             "elements": [
                 {
                     "id": "rule1_enable",
-                    "label": "Bật Rule Format 1",
+                    "label": "Bật Quy Tắc 1",
                     "type": "CHECKBOX",
                     "defaultValue": false
                 },
@@ -739,11 +739,11 @@
         },
         {
             "id": "rule2Section",
-            "label": "🎨 Tô Màu & Badge — Rule Format 2",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 2",
             "elements": [
                 {
                     "id": "rule2_enable",
-                    "label": "Bật Rule Format 2",
+                    "label": "Bật Quy Tắc 2",
                     "type": "CHECKBOX",
                     "defaultValue": false
                 },
@@ -807,11 +807,11 @@
         },
         {
             "id": "rule3Section",
-            "label": "🎨 Tô Màu & Badge — Rule Format 3",
+            "label": "🎨 Tô Màu & Badge — Quy Tắc 3",
             "elements": [
                 {
                     "id": "rule3_enable",
-                    "label": "Bật Rule Format 3",
+                    "label": "Bật Quy Tắc 3",
                     "type": "CHECKBOX",
                     "defaultValue": false
                 },
