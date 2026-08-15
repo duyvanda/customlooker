@@ -14,11 +14,11 @@
             "resource": {
                 "js": "gs://analytics_merap/excelchart3/index.bundle.v3.2.js",
                 "css": "gs://analytics_merap/excelchart3/index.v3.2.css",
-                "config": "gs://analytics_merap/excelchart3/index.json"
+                "config": "gs://analytics_merap/excelchart3/index.v3.2.json"
             }
         }
     ],
-    "devMode": false,
+    "devMode": true,
     "privacyPolicyUrl": "https://google.com",
     "termsOfServiceUrl": "https://google.com"
 }
