@@ -92,34 +92,34 @@ D:\customLooker/
 
 ---
 
-## 6. 🚀 Quy Trình Build & Deploy Khi Có Cập Nhật (Ví dụ lên `v3.25`)
+## 6. 🚀 Quy Trình Build & Deploy Khi Có Cập Nhật (Ví dụ lên `v3.26`)
 
 Chạy các lệnh sau trong PowerShell tại `D:\customLooker`:
 
 ```powershell
-# 1. Cập nhật output.filename trong webpack.config.js -> 'index.bundle.v3.25.js'
+# 1. Cập nhật output.filename trong webpack.config.js -> 'index.bundle.v3.26.js'
 # 2. Tạo bản copy CSS và JSON mới
-Copy-Item 'src/index.css' 'index.v3.25.css' -Force
-Copy-Item 'index.json' 'index.v3.25.json' -Force
+Copy-Item 'src/index.css' 'index.v3.26.css' -Force
+Copy-Item 'index.json' 'index.v3.26.json' -Force
 
 # 3. Cập nhật manifest.json:
-#    "js":     "gs://analytics_merap/excelchart3/index.bundle.v3.25.js"
-#    "css":    "gs://analytics_merap/excelchart3/index.v3.25.css"
-#    "config": "gs://analytics_merap/excelchart3/index.v3.25.json"
+#    "js":     "gs://analytics_merap/excelchart3/index.bundle.v3.26.js"
+#    "css":    "gs://analytics_merap/excelchart3/index.v3.26.css"
+#    "config": "gs://analytics_merap/excelchart3/index.v3.26.json"
 #    "devMode": false
 
 # 4. Build Webpack
 npm run build
 
 # 5. Dọn dẹp toàn bộ file version cũ và LICENSE.txt vào archive/
-Move-Item -Path "index.bundle.v3.24.js", "index.bundle.v3.24.js.LICENSE.txt", "index.v3.24.css", "index.v3.24.json" -Destination "archive/" -Force -ErrorAction SilentlyContinue
+Move-Item -Path "index.bundle.v3.25.js", "index.bundle.v3.25.js.LICENSE.txt", "index.v3.25.css", "index.v3.25.json" -Destination "archive/" -Force -ErrorAction SilentlyContinue
 
 # 6. Đóng gói ZIP
 Remove-Item -Path "customLooker.zip" -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path "src", "downloader.html", "index.v3.25.css", "index.json", "index.v3.25.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.v3.25.js", "AGENTS.md", "cai_tien.md", "changelog", "archive" -DestinationPath "customLooker.zip" -Force
+Compress-Archive -Path "src", "downloader.html", "index.v3.26.css", "index.json", "index.v3.26.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.v3.26.js", "AGENTS.md", "cai_tien.md", "changelog", "archive" -DestinationPath "customLooker.zip" -Force
 
 # 7. Deploy lên GCS Production (CHỈ KHI USER YÊU CẦU)
-gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.v3.25.js" "index.v3.25.css" "index.v3.25.json" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
+gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.v3.26.js" "index.v3.26.css" "index.v3.26.json" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
 ```
 
 ---

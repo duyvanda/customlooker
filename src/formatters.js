@@ -130,6 +130,11 @@ export function parseDateComponents(val) {
         const m = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/);
         yyyy = m[1]; mm = m[2]; dd = m[3]; hh = m[4]; min = m[5]; ss = m[6];
     }
+    // 2.1. 6 số YYYYMM (Year Month): 202608
+    else if (str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])$/)) {
+        const m = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])$/);
+        yyyy = m[1]; mm = m[2]; dd = '01';
+    }
     // 3. Chuẩn ISO / Database YYYY-MM-DD hoặc YYYY/MM/DD kèm giờ tùy chọn
     else if (str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)) {
         const m = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
@@ -171,6 +176,34 @@ export function parseDateComponents(val) {
         dayName: WEEKDAY_NAMES_EN[dayOfWeek] || '',
         dayShort: WEEKDAY_SHORT_EN[dayOfWeek] || ''
     };
+}
+
+// HÀM TẠO KEY CHUẨN ĐỂ SẮP XẾP NGÀY THÁNG THEO TRÌNH TỰ THỜI GIAN (YYYYMMDDHHMMSS)
+export function getDateSortKey(val, fieldType = '') {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    if (str === '' || str === '0' || str === '00000000') return null;
+
+    const comp = parseDateComponents(val);
+    if (comp) {
+        return `${comp.yyyy}${comp.mm}${comp.dd}${comp.hh}${comp.min}${comp.ss}`;
+    }
+
+    const ft = String(fieldType || '').toUpperCase();
+    if (ft && (ft.includes('DATE') || ft.includes('YEAR') || ft.includes('TIME') || ft.includes('MONTH') || ft.includes('DAY'))) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+            const yyyy = String(d.getFullYear());
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${yyyy}${mm}${dd}${hh}${min}${ss}`;
+        }
+    }
+
+    return null;
 }
 
 // HÀM ĐỊNH DẠNG NGÀY THÁNG THEO CHUẨN BIGQUERY FORMAT ELEMENTS (%Y, %m, %d, %H, %M, %S...)

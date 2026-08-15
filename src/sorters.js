@@ -5,6 +5,7 @@
 import {
     isDateValue,
     parseNumericValue,
+    getDateSortKey,
     VI_COLLATOR
 } from './formatters.js';
 
@@ -17,18 +18,29 @@ export function compareValues(a, b, fieldType = '') {
     if (isAEmpty) return 1;
     if (isBEmpty) return -1;
 
-    const strA = String(a).trim();
-    const strB = String(b).trim();
+    // 1. SO SÁNH NGÀY THÁNG THEO TRÌNH TỰ THỜI GIAN THỰC TẾ (Chronological Timestamp Sort)
+    const isDateCol = isDateValue(a, fieldType) || isDateValue(b, fieldType);
+    if (isDateCol) {
+        const dateKeyA = getDateSortKey(a, fieldType);
+        const dateKeyB = getDateSortKey(b, fieldType);
 
-    if (isDateValue(a, fieldType) && isDateValue(b, fieldType)) {
-        return strA.localeCompare(strB);
+        if (dateKeyA !== null && dateKeyB !== null) {
+            return dateKeyA.localeCompare(dateKeyB);
+        }
+        // Đưa các giá trị không hợp lệ (như '0', chuỗi rỗng) xuống dưới cùng
+        if (dateKeyA !== null && dateKeyB === null) return -1;
+        if (dateKeyA === null && dateKeyB !== null) return 1;
     }
 
+    // 2. SO SÁNH SỐ THỰC (Numeric Sort)
     const numA = parseNumericValue(a, fieldType);
     const numB = parseNumericValue(b, fieldType);
     if (!isNaN(numA) && !isNaN(numB)) {
         return numA - numB;
     }
 
+    // 3. SO SÁNH CHUỖI TIẾNG VIỆT TỰ NHIÊN (Natural String Sort)
+    const strA = String(a).trim();
+    const strB = String(b).trim();
     return VI_COLLATOR.compare(strA, strB);
 }
