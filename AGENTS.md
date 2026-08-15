@@ -163,9 +163,76 @@ git commit -m "<Nội dung commit bằng tiếng Việt mô tả thay đổi>"
 git push origin main
 ```
 
+### 5.5. 🔄 Hướng Dẫn Đổi GCS Folder (Ví dụ: `excelchart2` → `excelchart3`)
+
+Khi cần deploy sang folder GCS mới (tránh cache cũ, hoặc tạo môi trường mới), cần cập nhật **đúng 2 file** sau:
+
+#### 📄 File 1: [`manifest.json`](file:///D:/customLooker/manifest.json)
+
+Đổi tất cả 3 đường dẫn trong `resource` + kiểm tra `devMode`:
+```json
+"resource": {
+    "js":     "gs://analytics_merap/excelchart3/index.bundle.js",
+    "css":    "gs://analytics_merap/excelchart3/index.css",
+    "config": "gs://analytics_merap/excelchart3/index.json"
+},
+"devMode": false
+```
+> ⚠️ **Lưu ý `devMode`:**
+> - `devMode: true`  → Tắt cache CDN, dùng khi **đang phát triển/test** (tốc độ chậm hơn ~2-3s).
+> - `devMode: false` → Bật Google Edge CDN cache, dùng khi **production** (tốc độ nhanh nhất).
+
+---
+
+#### 📄 File 2: [`src/index.js`](file:///D:/customLooker/src/index.js#L103)
+
+Đổi hằng số `DOWNLOADER_URL` ở **dòng ~103**:
+```js
+const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart3/downloader.html';
+```
+
+---
+
+#### 🚀 Lệnh Deploy Sau Khi Đổi Folder
+
+```powershell
+# 1. Build lại bundle
+npm run build
+
+# 2. Deploy lên folder GCS mới
+gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.js" "index.css" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
+```
+
+---
+
+#### 🔧 Cập Nhật Trên Looker Studio
+
+Sau khi deploy xong, vào Looker Studio:
+1. Mở báo cáo → Bấm **Edit** (chỉnh sửa).
+2. Chọn vào Custom Viz → bấm nút **⋮** (ba chấm) → **Edit chart**.
+3. Trong phần cài đặt Community Visualization → cập nhật **Manifest Path** sang:
+   ```
+   gs://analytics_merap/excelchart3
+   ```
+4. Bấm **Save** → Looker Studio sẽ tải lại chart từ folder mới.
+
+---
+
+#### 📋 Checklist Tổng Hợp Khi Đổi Folder
+
+| # | Việc cần làm | File |
+|---|---|---|
+| 1 | Đổi 3 URL `resource` (js, css, config) | `manifest.json` |
+| 2 | Kiểm tra `devMode` (false = production) | `manifest.json` |
+| 3 | Đổi `DOWNLOADER_URL` | `src/index.js` (dòng ~103) |
+| 4 | `npm run build` | — |
+| 5 | `gsutil cp` lên GCS folder mới | — |
+| 6 | Cập nhật Manifest Path trên Looker Studio | Looker Studio UI |
+
 ---
 
 ## 6. 📝 Quy Tắc Walkthrough & Changelog Bắt Buộc
 
 - Khi hoàn thành bất kỳ nhiệm vụ hoặc thay đổi code nào trong dự án, Agent **luôn phải cập nhật file Walkthrough** để ghi nhận các thay đổi đó.
 - Trong cùng một phiên chat chỉ sử dụng duy nhất một file tại thư mục `changelog/` ở gốc dự án với tên file định dạng: `yyyymmdd_hhmmss_walkthrough.md` (ví dụ: [`changelog/20260814_204747_walkthrough.md`](file:///D:/customLooker/changelog/20260814_204747_walkthrough.md)).
+

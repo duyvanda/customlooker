@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Xuất File Excel</title>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -12,7 +15,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: #f1f5f9;
             margin: 0;
-            padding: 24px;
+            padding: 40px 24px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -21,146 +24,179 @@
         }
         .card {
             background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-            max-width: 640px;
-            width: 100%;
-            padding: 32px;
-            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.9);
+            max-width: 960px;
+            width: 95%;
+            padding: 48px 56px;
         }
         .header {
             display: flex;
             align-items: center;
-            gap: 16px;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 20px;
-            margin-bottom: 20px;
+            gap: 24px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 28px;
+            margin-bottom: 28px;
         }
         .status-icon {
-            width: 48px;
-            height: 48px;
+            width: 68px;
+            height: 68px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 36px;
             background: #ecfdf5;
             color: #059669;
             flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
         }
         .spinner {
-            width: 36px;
-            height: 36px;
-            border: 4px solid #e2e8f0;
+            width: 54px;
+            height: 54px;
+            border: 5px solid #e2e8f0;
             border-top-color: #107c41;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             flex-shrink: 0;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        h1 { margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; }
-        p { margin: 4px 0 0; color: #64748b; font-size: 13.5px; }
+        h1 { margin: 0; font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1.3; }
+        p { margin: 8px 0 0; color: #475569; font-size: 17.5px; line-height: 1.5; font-weight: 500; }
         
+        .tip-box {
+            background: #eff6ff;
+            border: 1.5px solid #93c5fd;
+            border-left: 6px solid #2563eb;
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            font-size: 17px;
+            color: #1e40af;
+            line-height: 1.65;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);
+        }
+        .tip-box strong {
+            color: #1e3a8a;
+            font-weight: 800;
+        }
+
         .action-bar {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 14px;
+            margin-bottom: 28px;
             flex-wrap: wrap;
         }
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 11px 18px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 13.5px;
+            gap: 12px;
+            padding: 15px 28px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 16.5px;
             cursor: pointer;
             border: none;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
             text-decoration: none;
             font-family: inherit;
         }
         .btn-green {
             background: #107c41;
             color: #ffffff;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 12px rgba(16, 124, 65, 0.25);
         }
-        .btn-green:hover { background: #0b5c30; }
+        .btn-green:hover { background: #0b5c30; transform: translateY(-1px); }
         
         .btn-blue {
             background: #0284c7;
             color: #ffffff;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
         }
-        .btn-blue:hover { background: #0369a1; }
+        .btn-blue:hover { background: #0369a1; transform: translateY(-1px); }
         
+        .btn-orange {
+            background: #c05621;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(192, 86, 33, 0.25);
+        }
+        .btn-orange:hover { background: #9c4221; transform: translateY(-1px); }
+
+        .btn-red {
+            background: #dc2626;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+        }
+        .btn-red:hover { background: #b91c1c; transform: translateY(-1px); }
+
         .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 2fr;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 18px;
+            margin-bottom: 28px;
         }
         .info-box {
             background: #f8fafc;
-            padding: 12px 16px;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
+            padding: 20px 24px;
+            border-radius: 14px;
+            border: 1.5px solid #e2e8f0;
         }
-        .info-label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
-        .info-val { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 3px; }
-        .info-filename { font-size: 12.5px; font-weight: 600; color: #0f172a; margin-top: 3px; word-break: break-word; }
+        .info-label { font-size: 13.5px; color: #64748b; text-transform: uppercase; font-weight: 800; letter-spacing: 0.8px; }
+        .info-val { font-size: 28px; font-weight: 900; color: #0f172a; margin-top: 6px; }
+        .info-filename { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 6px; word-break: break-word; }
 
         /* RAW FILTER PARAMS SECTION */
         .filter-section {
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 14px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 22px 26px;
         }
         .filter-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
         }
         .filter-title {
-            font-size: 12.5px;
+            font-size: 16px;
             font-weight: 700;
             color: #334155;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
         }
         .filter-textarea {
             width: 100%;
-            height: 90px;
+            height: 120px;
             background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: 10px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 14px 16px;
             font-family: 'Consolas', 'JetBrains Mono', 'Courier New', monospace;
-            font-size: 12px;
+            font-size: 14px;
             color: #0f172a;
             resize: vertical;
             outline: none;
+            line-height: 1.5;
         }
         .filter-textarea:focus {
             border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
         }
 
         .toast {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
+            bottom: 32px;
+            right: 32px;
             background: #0f172a;
             color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 13.5px;
+            padding: 16px 28px;
+            border-radius: 12px;
+            font-size: 16.5px;
             font-weight: 600;
             display: none;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             z-index: 9999;
             border: 1px solid #334155;
         }
@@ -179,8 +215,13 @@
         </div>
     </div>
 
+    <div class="tip-box" id="tipBox" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #1e40af; line-height: 1.5;">
+        💡 <strong>Mẹo chuyển sang Excel:</strong> Sau khi mở file CSV bằng Microsoft Excel ➔ Nhấn phím <strong>F12</strong> (Save As) ➔ Chọn định dạng <strong>Excel Workbook (*.xlsx)</strong> để lưu lại thành file Excel chuẩn.
+    </div>
+
     <div class="action-bar" id="actionBar" style="display: none;">
         <button class="btn btn-green" id="btnDownloadExcel">📥 Tải Lại Excel (.xlsx)</button>
+        <button class="btn btn-orange" id="btnDownloadCsv" style="display:none;">📄 Tải Lại CSV (.csv)</button>
         <button class="btn btn-blue" id="btnCopyFilterJson">📋 Copy JSON Date Range</button>
     </div>
 
@@ -223,6 +264,44 @@
         toast.textContent = text;
         toast.style.display = 'block';
         setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    // Xuất CSV bảo toàn số 0 đầu bằng trick ="0123" (Excel formula → text)
+    function downloadCsvFile(headers, rows, fileName) {
+        try {
+            function escapeCsvCell(val) {
+                if (val === null || val === undefined || val === '') return '';
+                const s = String(val);
+                // Số 0 đầu (SĐT, mã định danh): dùng ="..." để Excel giữ nguyên
+                if (/^0\d+$/.test(s.trim())) return `="${s.trim()}"`;
+                // Chuỗi có dấu phẩy, ngoặc kép, xuống dòng → bọc ngoặc kép, escape ngoặc kép bên trong
+                if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+                    return `"${s.replace(/"/g, '""')}"`;
+                }
+                return s;
+            }
+
+            const lines = [];
+            lines.push(headers.map(escapeCsvCell).join(','));
+            rows.forEach(row => {
+                lines.push(row.map(escapeCsvCell).join(','));
+            });
+
+            // BOM UTF-8 để Excel nhận đúng tiếng Việt
+            const csvContent = '\uFEFF' + lines.join('\r\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName.endsWith('.csv') ? fileName : (fileName + '.csv');
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+            return true;
+        } catch (err) {
+            console.error('Lỗi tạo CSV:', err);
+            return false;
+        }
     }
 
     // Xuất file Excel chuẩn từ mảng 2D (Bảo toàn 100% số 0 ở đầu cho SĐT, Mã định danh, Text)
@@ -340,13 +419,33 @@
 
         const headers = payload.headers || [];
         const rows = payload.rows || [];
-        const fileName = payload.fileName || 'Bao_cao_Looker_Studio.xlsx';
+        const fileName = payload.fileName || 'Bao_cao_Looker_Studio';
         const filterInfo = payload.filterInfo || {};
+        const isCsv = payload.type === 'CSV_DOWNLOAD';
 
-        globalData = { headers, rows, fileName, filterInfo };
+        globalData = { headers, rows, fileName, filterInfo, isCsv };
 
-        // Tự động tải Excel ngay
-        const success = downloadExcelFile(headers, rows, fileName);
+        let success = false;
+        if (isCsv) {
+            success = downloadCsvFile(headers, rows, fileName);
+        } else {
+            success = downloadExcelFile(headers, rows, fileName);
+        }
+
+        const isHeavy = rows.length > 200000;
+        const btnExcelEl = document.getElementById('btnDownloadExcel');
+        const btnCsvEl = document.getElementById('btnDownloadCsv');
+
+        btnExcelEl.style.display = 'inline-flex';
+        btnCsvEl.style.display = 'inline-flex';
+
+        if (isHeavy) {
+            btnExcelEl.className = 'btn btn-red';
+            btnExcelEl.textContent = '⚠️ Tải Lại Excel (>200k dòng - Dễ lag)';
+        } else {
+            btnExcelEl.className = 'btn btn-green';
+            btnExcelEl.textContent = '📥 Tải Lại Excel (<200k dòng)';
+        }
 
         // Hiển thị Filter Preview JSON
         const filterPreview = document.getElementById('filterPreview');
@@ -356,10 +455,20 @@
 
         // Update giao diện UI
         document.getElementById('iconContainer').innerHTML = '<div class="status-icon">✓</div>';
-        document.getElementById('title').textContent = success ? '✅ Đã tải file Excel thành công!' : '📋 Dữ liệu đã sẵn sàng';
-        document.getElementById('subtitle').textContent = success 
-            ? 'File Excel đã lưu vào máy. Bạn có thể copy Date Range nguyên bản bên dưới.'
-            : 'Vui lòng bấm nút Tải Lại Excel bên dưới.';
+        document.getElementById('title').textContent = success
+            ? (isCsv ? '✅ Đã tải file CSV thành công!' : '✅ Đã tải file Excel thành công!')
+            : '📋 Dữ liệu đã sẵn sàng';
+
+        if (success) {
+            if (isCsv) {
+                document.getElementById('subtitle').innerHTML = 'File CSV đã lưu vào máy (bảo toàn số 0 ở đầu). Mở file và nhấn <strong>F12</strong> để lưu thành .xlsx.';
+            } else {
+                document.getElementById('subtitle').textContent = 'File Excel đã lưu vào máy. Bạn có thể copy Date Range nguyên bản bên dưới.';
+            }
+            document.getElementById('tipBox').style.display = 'block';
+        } else {
+            document.getElementById('subtitle').textContent = 'Vui lòng bấm nút tải lại bên dưới.';
+        }
 
         document.getElementById('actionBar').style.display = 'flex';
         document.getElementById('infoGrid').style.display = 'grid';
@@ -384,6 +493,13 @@
         if (!globalData) return;
         downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName);
         showToast('📥 Đang tải file Excel (.xlsx)...');
+    });
+
+    // Nút Tải Lại CSV
+    document.getElementById('btnDownloadCsv').addEventListener('click', () => {
+        if (!globalData) return;
+        downloadCsvFile(globalData.headers, globalData.rows, globalData.fileName);
+        showToast('📄 Đang tải file CSV...');
     });
 
     // Nút Copy JSON Date Range

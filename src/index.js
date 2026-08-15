@@ -99,8 +99,11 @@ function isNumericValue(val, fieldType = '') {
     return /^-?\d+(\.\d+)?$/.test(s);
 }
 
+// COLLATOR TIẾNG VIỆT — Khởi tạo 1 lần duy nhất, tái sử dụng trong toàn bộ vòng sort
+const VI_COLLATOR = new Intl.Collator('vi', { numeric: true, sensitivity: 'base' });
+
 // HÀM MỞ HELPER XUẤT EXCEL (VƯỢT QUA GIỚI HẠN SANDBOX ALLOW-DOWNLOADS CỦA GOOGLE)
-const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart2/downloader.html';
+const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart3/downloader.html';
 
 function downloadViaHelper(payload) {
     try {
@@ -216,7 +219,7 @@ function compareValues(a, b, fieldType = '') {
         return Number(a) - Number(b);
     }
 
-    return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
+    return VI_COLLATOR.compare(strA, strB);
 }
 
 // HÀM TÌM RAW INDEX CỦA FIELD TỪ DATA HEADERS (ƯU TIÊN ID TRƯỚC -> NAME FALLBACK)
@@ -747,6 +750,7 @@ function renderTable() {
         const styleConfig = currentData.style || {};
         const fields = currentData.fields || {};
         const configWarnings = [];
+        const tableColumns = extractTableColumns(currentData);
         const searchColumns = extractSearchColumns(currentData, tableColumns, configWarnings);
         const setupSortLevels = extractSetupSortConfig(currentData, styleConfig, tableColumns, configWarnings);
         const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig, tableColumns, configWarnings);
@@ -775,7 +779,13 @@ function renderTable() {
         const textWrap = styleConfig.textWrap ? styleConfig.textWrap.value === true : false;
         const showSearch = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
         const showColPopup = styleConfig.showColPopup ? styleConfig.showColPopup.value !== false : true;
+        const showExcelExport = styleConfig.showExcelExport ? styleConfig.showExcelExport.value !== false : true;
+        const showCsvExport = styleConfig.showCsvExport ? styleConfig.showCsvExport.value !== false : true;
         const allowHeaderSort = styleConfig.allowHeaderSort ? styleConfig.allowHeaderSort.value !== false : true;
+
+        // Độ rộng cột tối đa (Max Width)
+        const colMaxWidthVal = (styleConfig.colMaxWidth && styleConfig.colMaxWidth.value !== undefined) ? String(styleConfig.colMaxWidth.value) : '300';
+        const colMaxWidthCss = (colMaxWidthVal === 'none' || colMaxWidthVal === '-1') ? 'none' : (colMaxWidthVal.endsWith('px') ? colMaxWidthVal : `${colMaxWidthVal}px`);
 
         // Khởi tạo search text từ Style default
         const defaultSearchTextFromStyle = (styleConfig.defaultSearchText && styleConfig.defaultSearchText.value !== undefined) ? String(styleConfig.defaultSearchText.value) : '';
@@ -898,6 +908,120 @@ function renderTable() {
             wrapper.appendChild(warnBox);
         }
 
+        // HÀM XỬ LÝ XUẤT EXCEL
+        function handleExportExcel() {
+            try {
+                if (!rawRows || rawRows.length === 0) {
+                    alert('Không có dữ liệu để xuất file!');
+                    return;
+                }
+                if (visibleColumns.length === 0) {
+                    alert('Chưa có cột nào được hiển thị!');
+                    return;
+                }
+                const rowsToExport = sortedRows;
+                if (rowsToExport.length === 0) {
+                    alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
+                    return;
+                }
+
+                const exportHeaders = [];
+                if (showSTT) exportHeaders.push('STT');
+                visibleColumns.forEach(c => exportHeaders.push(c.name));
+
+                const excelRows = [];
+                const excelDataObjects = [];
+                rowsToExport.forEach((row, rIdx) => {
+                    const rowData = [];
+                    const rowObj = {};
+                    if (showSTT) {
+                        rowData.push(rIdx + 1);
+                        rowObj['STT'] = rIdx + 1;
+                    }
+                    visibleColumns.forEach(c => {
+                        const val = row ? row[c.rawIndex] : '';
+                        let formattedVal = val;
+                        if (val === null || val === undefined) {
+                            formattedVal = '';
+                        } else if (isDateValue(val, c.type)) {
+                            formattedVal = formatDateValue(val, 'date');
+                        }
+                        rowData.push(formattedVal);
+                        rowObj[c.name] = formattedVal;
+                    });
+                    excelRows.push(rowData);
+                    excelDataObjects.push(rowObj);
+                });
+
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
+                const filterInfo = extractActiveFilterInfo(currentData);
+
+                downloadViaHelper({
+                    type: 'EXCEL_DOWNLOAD',
+                    headers: exportHeaders,
+                    rows: excelRows,
+                    excelData: excelDataObjects,
+                    filterInfo: filterInfo,
+                    fileName: fileName
+                });
+            } catch (err) {
+                console.error('[ExcelViz] Export error:', err);
+                alert('Lỗi khi xuất file: ' + err.message);
+            }
+        }
+
+        // HÀM XỬ LÝ XUẤT CSV (BẢO TOÀN SỐ 0 ĐẦU)
+        function handleExportCsv() {
+            try {
+                if (!rawRows || rawRows.length === 0) {
+                    alert('Không có dữ liệu để xuất file!');
+                    return;
+                }
+                if (visibleColumns.length === 0) {
+                    alert('Chưa có cột nào được hiển thị!');
+                    return;
+                }
+                const rowsToExport = sortedRows;
+                if (rowsToExport.length === 0) {
+                    alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
+                    return;
+                }
+
+                const exportHeaders = [];
+                if (showSTT) exportHeaders.push('STT');
+                visibleColumns.forEach(c => exportHeaders.push(c.name));
+
+                const csvRows = [];
+                rowsToExport.forEach((row, rIdx) => {
+                    const rowData = [];
+                    if (showSTT) rowData.push(rIdx + 1);
+                    visibleColumns.forEach(c => {
+                        const val = row ? row[c.rawIndex] : '';
+                        let formattedVal = (val === null || val === undefined) ? '' : val;
+                        if (isDateValue(val, c.type)) formattedVal = formatDateValue(val, 'date');
+                        rowData.push(formattedVal);
+                    });
+                    csvRows.push(rowData);
+                });
+
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const csvFileName = `Bao_cao_rawdata_${todayStr}.csv`;
+                const filterInfo = extractActiveFilterInfo(currentData);
+
+                downloadViaHelper({
+                    type: 'CSV_DOWNLOAD',
+                    headers: exportHeaders,
+                    rows: csvRows,
+                    filterInfo: filterInfo,
+                    fileName: csvFileName
+                });
+            } catch (err) {
+                console.error('[ExcelViz] CSV Export error:', err);
+                alert('Lỗi khi xuất CSV: ' + err.message);
+            }
+        }
+
         // TOOLBAR PHÍA TRÊN
         const toolbar = document.createElement('div');
         toolbar.className = 'table-toolbar';
@@ -905,14 +1029,34 @@ function renderTable() {
         const toolbarLeft = document.createElement('div');
         toolbarLeft.className = 'toolbar-left';
 
-        // Nút Xuất Excel (Hiển thị số dòng hiện tại theo bộ lọc)
-        const btnExcel = document.createElement('button');
-        btnExcel.className = 'btn-excel';
-        btnExcel.innerHTML = `
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="m15.5 15.5-1.4 1.4-2.1-2.1V19h-2v-4.2l-2.1 2.1-1.4-1.4 4.5-4.5 4.5 4.5z"/></svg>
-            <span>Xuất Excel (${totalRows.toLocaleString('vi-VN')} dòng)</span>
-        `;
-        toolbarLeft.appendChild(btnExcel);
+        // Nút Xuất Excel (Cảnh báo đỏ nếu >200k dòng)
+        if (showExcelExport) {
+            const isHeavyExcel = totalRows > 200000;
+            const btnExcel = document.createElement('button');
+            btnExcel.className = `btn-excel ${isHeavyExcel ? 'btn-excel-danger' : ''}`;
+            btnExcel.id = 'btn-main-excel-export';
+            const excelLabel = isHeavyExcel ? 'Xuất Excel (>200k dòng)' : 'Xuất Excel (<200k dòng)';
+            btnExcel.title = isHeavyExcel ? 'Cảnh báo: Dữ liệu lớn trên 200k dòng có thể gây chậm hoặc đơ trình duyệt. Khuyên dùng nút Xuất CSV.' : 'Xuất file Excel .xlsx';
+            btnExcel.innerHTML = `
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="m15.5 15.5-1.4 1.4-2.1-2.1V19h-2v-4.2l-2.1 2.1-1.4-1.4 4.5-4.5 4.5 4.5z"/></svg>
+                <span>${excelLabel}</span>
+            `;
+            btnExcel.addEventListener('click', handleExportExcel);
+            toolbarLeft.appendChild(btnExcel);
+        }
+
+        // Nút Xuất CSV (Bảo toàn số 0 đầu)
+        if (showCsvExport) {
+            const btnCsv = document.createElement('button');
+            btnCsv.className = 'btn-csv';
+            btnCsv.id = 'btn-main-csv-export';
+            btnCsv.innerHTML = `
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="M10 13H8v-2h2v2zm4 0h-2v-2h2v2zm-4 4H8v-2h2v2zm4 0h-2v-2h2v2z"/></svg>
+                <span>Xuất CSV</span>
+            `;
+            btnCsv.addEventListener('click', handleExportCsv);
+            toolbarLeft.appendChild(btnCsv);
+        }
 
         // Nút Popup Ẩn/Hiện Cột
         if (showColPopup) {
@@ -1004,6 +1148,7 @@ function renderTable() {
         const table = document.createElement('table');
         table.className = `preview-table table-${tableVariant} density-${rowDensity} ${textWrap ? '' : 'text-nowrap'}`;
         table.style.fontSize = `${fontSize}px`;
+        table.style.setProperty('--col-max-width', colMaxWidthCss);
 
         // THEAD
         const thead = document.createElement('thead');
@@ -1230,74 +1375,6 @@ function renderTable() {
                 newSearchInput.setSelectionRange(pos, pos);
             }
         }
-
-        // SỰ KIỆN XUẤT FILE EXCEL (.XLSX)
-        btnExcel.addEventListener('click', () => {
-            try {
-                if (!rawRows || rawRows.length === 0) {
-                    alert('Không có dữ liệu để xuất file!');
-                    return;
-                }
-
-                if (visibleColumns.length === 0) {
-                    alert('Chưa có cột nào được hiển thị!');
-                    return;
-                }
-
-                const rowsToExport = sortedRows;
-
-                if (rowsToExport.length === 0) {
-                    alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
-                    return;
-                }
-
-                const exportHeaders = [];
-                if (showSTT) exportHeaders.push('STT');
-                visibleColumns.forEach(c => exportHeaders.push(c.name));
-
-                const excelRows = [];
-                const excelDataObjects = [];
-
-                rowsToExport.forEach((row, rIdx) => {
-                    const rowData = [];
-                    const rowObj = {};
-                    if (showSTT) {
-                        rowData.push(rIdx + 1);
-                        rowObj['STT'] = rIdx + 1;
-                    }
-                    visibleColumns.forEach(c => {
-                        const val = row ? row[c.rawIndex] : '';
-                        let formattedVal = val;
-                        if (val === null || val === undefined) {
-                            formattedVal = '';
-                        } else if (isDateValue(val, c.type)) {
-                            formattedVal = formatDateValue(val, 'date');
-                        }
-                        rowData.push(formattedVal);
-                        rowObj[c.name] = formattedVal;
-                    });
-                    excelRows.push(rowData);
-                    excelDataObjects.push(rowObj);
-                });
-
-                const todayStr = new Date().toISOString().slice(0, 10);
-                const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
-                const filterInfo = extractActiveFilterInfo(currentData);
-
-                downloadViaHelper({
-                    type: 'EXCEL_DOWNLOAD',
-                    headers: exportHeaders,
-                    rows: excelRows,
-                    excelData: excelDataObjects,
-                    filterInfo: filterInfo,
-                    fileName: fileName
-                });
-
-            } catch (err) {
-                console.error('[ExcelViz] Export error:', err);
-                alert('Lỗi khi xuất file: ' + err.message);
-            }
-        });
 
     } catch (err) {
         console.error('[ExcelViz] renderTable error:', err);

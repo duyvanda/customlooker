@@ -226,6 +226,33 @@
                     "label": "Cho phép người xem ẩn/hiện cột (👁️ Cột hiển thị)",
                     "type": "CHECKBOX",
                     "defaultValue": true
+                },
+                {
+                    "id": "colMaxWidth",
+                    "label": "Độ rộng cột tối đa (Max Width)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "300",
+                    "options": [
+                        { "label": "150px (Rất hẹp)", "value": "150" },
+                        { "label": "200px (Hẹp)", "value": "200" },
+                        { "label": "250px (Vừa phải)", "value": "250" },
+                        { "label": "300px (Mặc định)", "value": "300" },
+                        { "label": "400px (Rộng)", "value": "400" },
+                        { "label": "500px (Rất rộng)", "value": "500" },
+                        { "label": "Không giới hạn", "value": "none" }
+                    ]
+                },
+                {
+                    "id": "showExcelExport",
+                    "label": "Hiển thị nút Xuất Excel (.xlsx)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "showCsvExport",
+                    "label": "Hiển thị nút Xuất CSV (.csv)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
                 }
             ]
         },

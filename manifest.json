@@ -1,20 +1,20 @@
 {
-    "name": "Custom Table with Excel Export",
-    "organization": "Duy Quang Data Solution",
-    "description": "Bảng dữ liệu custom tích hợp nút bấm export file Excel .xlsx trực tiếp.",
+    "name": "Custom Table with Excel & CSV Export v3",
+    "organization": "Duy Quang Data Solution v3",
+    "description": "Bảng dữ liệu custom tích hợp nút bấm export file Excel .xlsx và CSV trực tiếp.",
     "logoUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/logo.png",
     "companyUrl": "https://google.com",
     "supportUrl": "https://google.com",
     "components": [
         {
             "id": "excelExportTable",
-            "name": "Excel Export Table",
+            "name": "Excel & CSV Export Table v3",
             "description": "Kéo thả dimension và metric để tạo bảng dữ liệu có nút Export Excel.",
             "iconUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/table.png",
             "resource": {
-                "js": "gs://analytics_merap/excelchart2/index.bundle.js",
-                "css": "gs://analytics_merap/excelchart2/index.css",
-                "config": "gs://analytics_merap/excelchart2/index.json"
+                "js": "gs://analytics_merap/excelchart3/index.bundle.js",
+                "css": "gs://analytics_merap/excelchart3/index.css",
+                "config": "gs://analytics_merap/excelchart3/index.json"
             }
         }
     ],
