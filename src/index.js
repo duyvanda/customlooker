@@ -383,18 +383,21 @@ function renderTable() {
         }
 
         // HÀM XỬ LÝ XUẤT EXCEL
-        function handleExportExcel() {
+        function handleExportExcel(preOpenedWindow = null) {
             try {
                 if (!rawRows || rawRows.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Không có dữ liệu để xuất file!');
                     return;
                 }
                 if (visibleColumns.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Chưa có cột nào được hiển thị!');
                     return;
                 }
                 const rowsToExport = sortedRows;
                 if (rowsToExport.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
                     return;
                 }
@@ -475,26 +478,30 @@ function renderTable() {
                     excelData: excelDataObjects,
                     filterInfo: filterInfo,
                     fileName: fileName
-                });
+                }, preOpenedWindow);
             } catch (err) {
+                if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                 console.error('[ExcelViz] Export error:', err);
                 alert('Lỗi khi xuất file: ' + err.message);
             }
         }
 
         // HÀM XỬ LÝ XUẤT CSV (BẢO TOÀN SỐ 0 ĐẦU)
-        function handleExportCsv() {
+        function handleExportCsv(preOpenedWindow = null) {
             try {
                 if (!rawRows || rawRows.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Không có dữ liệu để xuất file!');
                     return;
                 }
                 if (visibleColumns.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Chưa có cột nào được hiển thị!');
                     return;
                 }
                 const rowsToExport = sortedRows;
                 if (rowsToExport.length === 0) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                     alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
                     return;
                 }
@@ -556,8 +563,9 @@ function renderTable() {
                     rows: csvRows,
                     filterInfo: filterInfo,
                     fileName: csvFileName
-                });
+                }, preOpenedWindow);
             } catch (err) {
+                if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                 console.error('[ExcelViz] CSV Export error:', err);
                 alert('Lỗi khi xuất CSV: ' + err.message);
             }
@@ -602,7 +610,13 @@ function renderTable() {
                 </svg>
                 <span>${excelLabel}</span>
             `;
-            btnExcel.addEventListener('click', handleExportExcel);
+            btnExcel.addEventListener('click', () => {
+                let preWin = null;
+                try {
+                    preWin = window.open('', '_blank');
+                } catch (e) {}
+                handleExportExcel(preWin);
+            });
             toolbarLeft.appendChild(btnExcel);
         }
 
@@ -620,7 +634,13 @@ function renderTable() {
                 </svg>
                 <span>CSV</span>
             `;
-            btnCsv.addEventListener('click', handleExportCsv);
+            btnCsv.addEventListener('click', () => {
+                let preWin = null;
+                try {
+                    preWin = window.open('', '_blank');
+                } catch (e) {}
+                handleExportCsv(preWin);
+            });
             toolbarLeft.appendChild(btnCsv);
         }
 
