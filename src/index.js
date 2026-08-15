@@ -1556,12 +1556,17 @@ function renderTable() {
                         rowObj['STT'] = rIdx + 1;
                     }
                     visibleColumns.forEach(c => {
+                        const colNameLower = (c.name || '').trim().toLowerCase();
+                        const colNameNoAccent = remove_accents(c.name || '');
+                        const colFieldId = (c.fieldId || '').trim().toLowerCase();
+                        const colDateFmt = columnDateFormatMap[colNameLower] || columnDateFormatMap[colNameNoAccent] || columnDateFormatMap[colFieldId] || '';
+
                         const val = row ? row[c.rawIndex] : '';
                         let formattedVal = val;
                         if (val === null || val === undefined) {
                             formattedVal = '';
-                        } else if (isDateValue(val, c.type)) {
-                            formattedVal = formatDateValue(val, 'date');
+                        } else if (isDateValue(val, c.type) || Boolean(colDateFmt)) {
+                            formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
                         }
                         rowData.push(formattedVal);
                         rowObj[c.name] = formattedVal;
@@ -1646,9 +1651,16 @@ function renderTable() {
                     const rowData = [];
                     if (showSTT) rowData.push(rIdx + 1);
                     visibleColumns.forEach(c => {
+                        const colNameLower = (c.name || '').trim().toLowerCase();
+                        const colNameNoAccent = remove_accents(c.name || '');
+                        const colFieldId = (c.fieldId || '').trim().toLowerCase();
+                        const colDateFmt = columnDateFormatMap[colNameLower] || columnDateFormatMap[colNameNoAccent] || columnDateFormatMap[colFieldId] || '';
+
                         const val = row ? row[c.rawIndex] : '';
                         let formattedVal = (val === null || val === undefined) ? '' : val;
-                        if (isDateValue(val, c.type)) formattedVal = formatDateValue(val, 'date');
+                        if (isDateValue(val, c.type) || Boolean(colDateFmt)) {
+                            formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
+                        }
                         rowData.push(formattedVal);
                     });
                     csvRows.push(rowData);
