@@ -45,8 +45,10 @@ D:\customLooker/
 
 1. **Phạm vi tính toán:** Bắt buộc tính trên toàn bộ dữ liệu đã lọc (`sortedRows`, có thể lên đến hàng chục nghìn dòng), **tuyệt đối không** tính trên trang hiển thị hiện tại (`pageRows`).
 2. **Thứ tự ưu tiên phép tính Metric (Aggregation Priority):**
-   - **Ưu tiên 1 (Cao nhất):** Cấu hình text ghi đè trong Style panel (`perColumnSummary` dạng `m1:sum,m2:avg,m3:min` với `m1` là metric đầu tiên trong danh sách Setup).
-   - **Ưu tiên 2:** Metadata `f.aggregation` trả về từ Looker Studio (SUM, AVG, MIN, MAX, COUNT).
+   - **Ưu tiên 1 (Cao nhất - Ghi đè tùy chọn):** Cấu hình text ghi đè trong Style panel (`perColumnSummary`). Hỗ trợ trực tiếp:
+     - Tên cột tiếng Việt (có dấu / không dấu / không phân biệt hoa thường): `Doanh Thu:avg, Số Lượng:sum, don gia:min`.
+     - Mã trường (Field ID): `qt_met1:min`.
+   - **Ưu tiên 2 (Mặc định tự động):** Metadata `f.aggregation` trả về từ Looker Studio (SUM, AVG, MIN, MAX, COUNT) do người dùng chọn bên Setup.
    - **Ưu tiên 3 (Fallback):** Cấu hình dropdown mặc định toàn cục `summaryType`.
 3. **Xử lý số thực & chữ số thập phân (Decimal Places):**
    - Dùng `parseNumericValue(val, col.type)` để bóc tách chính xác mọi định dạng số (có dấu phẩy/chấm phân cách ngàn).
@@ -121,9 +123,81 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-re
 2. **Nguyên nhân gây giật/khựng khi kéo dài Bounding Box:**
    - Khi người dùng kéo núm Bounding Box, nếu con trỏ chuột lướt vào phạm vi `<iframe>`, trình duyệt sẽ chuyển quyền bắt sự kiện chuột (`pointer-events`) sang iframe, làm Looker Studio mất dấu chuột dẫn đến Bounding Box bị khựng/lag.
    - Looker Studio gửi sự kiện `RENDER` liên tục ở tần số cao (30-60 lần/giây) khi Bounding Box thay đổi kích thước.
-3. **Quy tắc bắt buộc trong Code để chống Lag:**
-   - **Batching với `requestAnimationFrame` (RAF):** Cả `drawVisualization` và `ResizeObserver` đều **bắt buộc** phải bọc qua RAF để gom các lần render theo tần số quét màn hình, tránh re-render và re-sort dữ liệu lớn liên tục.
-   - **CSS 100% Container Fit:** `.table-wrapper` và `#excelviz-app-root` luôn phải để `width: 100%; height: 100%; overflow: hidden;` (không dùng `100vh`) để khớp chính xác 100% với kích thước iframe do Bounding Box cấp.
-4. **Mẹo hỗ trợ User khi cần chỉnh kích thước:**
-   - **Sync nhanh không cần kéo:** Chọn biểu đồ mẫu + bảng Custom Viz -> Chuột phải -> **Make same size (Kích thước phù hợp)** -> **Height (Chiều cao)**.
-   - **Kéo góc:** Kéo núm vuông ở góc dưới bên phải thay vì núm ở giữa cạnh đáy để hạn chế chuột lọt vào lòng iframe.
+
+---
+
+## 9. 📡 Tổng Hợp API Looker Studio Community Viz (Cung Cấp & Chưa Có / Hạn Chế)
+
+### 9.1. Các API & Dữ Liệu Looker Studio CUNG CẤP (`@google/dscc`)
+
+| Thành Phần API | Chi Tiết Dữ Liệu & Cơ Chế | Ứng Dụng Trong Dự Án |
+| :--- | :--- | :--- |
+| **`dscc.subscribeToData`** | Callback lắng nghe sự kiện đẩy dữ liệu khi trang load, filter thay đổi, resize hoặc sửa cấu hình (`transform: dscc.tableTransform` hoặc `objectTransform`). | `drawVisualization(data)` batching với `requestAnimationFrame` để render DOM. |
+| **`data.tables.DEFAULT`** | Chứa `headers` (`[{ id, name, type }]`) và `rows` (Mảng 2D dữ liệu các dòng). | Pipeline xử lý dữ liệu: `tableColumns`, `rawRows`, sắp xếp, lọc tìm kiếm, phân trang. |
+| **`data.fields` (Metadata Cột & Phép Tính)** | Danh sách các trường theo từng slot Setup (`dimensions`, `metrics`, `sort1Dimension`, `searchFields`...).<br>Mỗi field có đầy đủ metadata:<br>• **`id`**: Mã định danh trường (vd: `qt_1a2b3c`).<br>• **`name`**: Tên hiển thị cột (vd: `"Doanh Thu"`, `"Mã KH"`).<br>• **`type`**: Kiểu dữ liệu (`TEXT`, `NUMBER`, `PERCENT`, `CURRENCY`, `YEAR_MONTH_DAY`, `BOOLEAN`...).<br>• **`aggregation`**: Phép tính được chọn bên Setup (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNT_DISTINCT`, `AUTO`, `NONE`...). | • Nhận diện kiểu dữ liệu (`type`) để format ngày tháng, số thập phân, tiền tệ, căn lề.<br>• Tự động nhận diện phép tính (`aggregation`) của từng metric để chọn hàm tính toán tương ứng (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`) cho dòng Tổng Hợp. |
+| **`data.style`** | Đọc các tùy chọn cấu hình từ tab Style trong `index.json` (`styleConfig[key].value` hoặc `defaultValue`). Hỗ trợ các control: `SELECT_SINGLE`, `CHECKBOX`, `TEXTINPUT`, `COLOR_PICKER`, `FILL_COLOR`... | Cấu hình cỡ chữ, màu sắc, phân trang, ghim cột, ẩn/hiện nút xuất, per-column summary. |
+| **`data.dateRanges`** | `data.dateRanges.DEFAULT.start` & `.end` (Định dạng `YYYYMMDD`) khi báo cáo có Date Range Filter active. | Trích xuất gửi kèm Helper Tab xuất Excel/CSV (`extractActiveFilterInfo`). |
+| **`data.theme`** | Bảng màu theme của báo cáo (`themeFillColor`, `themeFontColor`, `themeAccentFillColor`...). | Đồng bộ style theo theme Looker (nếu cần). |
+| **`data.interactions` & `dscc.sendInteraction`** | API gửi tương tác lọc chéo (Cross-filtering) sang các chart khác trên trang báo cáo. | Hỗ trợ lọc liên biểu đồ khi click dòng (nếu kích hoạt). |
+
+#### 🔍 Minh Họa Cấu Trúc `data.fields` Thực Tế Nhận Được Từ Looker Studio:
+```json
+{
+  "fields": {
+    "dimensions": [
+      { "id": "qt_dim1", "name": "Mã Khách Hàng", "type": "TEXT" },
+      { "id": "qt_dim2", "name": "Ngày Giao Hàng", "type": "YEAR_MONTH_DAY" }
+    ],
+    "metrics": [
+      { "id": "qt_met1", "name": "Số Lượng", "type": "NUMBER", "aggregation": "SUM" },
+      { "id": "qt_met2", "name": "Đơn Giá TB", "type": "NUMBER", "aggregation": "AVG" },
+      { "id": "qt_met3", "name": "Doanh Số Nhỏ Nhất", "type": "NUMBER", "aggregation": "MIN" }
+    ],
+    "searchFields": [
+      { "id": "qt_dim1", "name": "Mã Khách Hàng", "type": "TEXT" }
+    ]
+  }
+}
+```
+
+#### 🔍 Minh Họa Cấu Trúc `data.tables.DEFAULT` Thực Tế Nhận Được:
+```json
+{
+  "tables": {
+    "DEFAULT": {
+      "headers": [
+        { "id": "qt_dim1", "name": "Mã Khách Hàng", "type": "TEXT" },
+        { "id": "qt_dim2", "name": "Ngày Giao Hàng", "type": "YEAR_MONTH_DAY" },
+        { "id": "qt_met1", "name": "Số Lượng", "type": "NUMBER" },
+        { "id": "qt_met2", "name": "Đơn Giá TB", "type": "NUMBER" },
+        { "id": "qt_met3", "name": "Doanh Số Nhỏ Nhất", "type": "NUMBER" }
+      ],
+      "rows": [
+        ["KH0001", "20260815", 150, 25000.5, 3750000],
+        ["KH0002", "20260814", 80,  45000.0, 3600000],
+        ["KH0003", "20260813", 200, 18500.0, 3700000],
+        ["KH0004", null,       0,   0,       0]
+      ]
+    }
+  }
+}
+```
+*Ghi chú:*
+- `headers`: Chứa định nghĩa các cột theo đúng thứ tự hiển thị từ trái qua phải (0, 1, 2, 3, 4...).
+- `rows`: Mảng 2 chiều chứa dữ liệu từng dòng. Mỗi phần tử trong row ánh xạ trực tiếp theo chỉ số cột `headers[i]`.
+
+---
+
+### 9.2. Các API & Tính Năng Looker Studio CHƯA CÓ / HẠN CHẾ (Missing APIs & Limitations)
+
+| Tính Năng Thiếu / Hạn Chế | Mô Tả Hạn Chế Của Looker Studio | Giải Pháp Tự Triển Khai (Workaround) |
+| :--- | :--- | :--- |
+| **1. Không có API Phân Trang (Pagination)** | Looker Studio đẩy toàn bộ dữ liệu về một lần (tối đa tới giới hạn connector/1M dòng), không hỗ trợ phân trang phía backend cho Custom Viz. | Tự xây dựng toàn bộ logic phân trang client-side (`runtimeState.currentPage`, `pageSizeOverride`, thanh điều hướng 2 hàng). |
+| **2. Không có Dữ Liệu Dòng Tổng Hợp Sẵn (Summary Row Data)** | Looker Studio **chỉ cung cấp metadata `f.aggregation`** (SUM/AVG/MIN/MAX...) chứ **không tính toán sẵn kết quả tổng hợp của toàn bộ bảng** cho Custom Viz (khác với bảng Native Table có backend trả về kết quả). | Viz dùng metadata `f.aggregation` từ `data.fields.metrics` kết hợp duyệt toàn bộ mảng dòng đã lọc (`sortedRows`) trên Frontend để tự tính kết quả số liệu hiển thị. |
+| **3. Không có API Xuất File Trực Tiếp (`allow-downloads`)** | Iframe Sandbox của Looker Studio **thiếu cờ `allow-downloads`**, chặn toàn bộ link `<a> download` và Blob/FileSaver trực tiếp. | Kiến trúc Helper Tab: `window.open` trang `downloader.html` trên GCS + truyền dữ liệu qua `postMessage`. |
+| **4. Không có API Lưu Trạng Thái Người Dùng (State Persistence)** | Không có cơ chế lưu cài đặt của người xem (Viewer) như: cột ẩn/hiện, độ rộng cột đã kéo, bookmark cá nhân. F5 sẽ reset về mặc định của Editor. | Cần tích hợp thêm Backend/Database ngoài (ví dụ: Google Cloud Functions + Firebase Firestore). |
+| **5. Không có Two-way Binding Cho Setup/Style** | Viz chỉ có quyền **đọc** (read-only) từ Looker Studio, không thể gọi API để cập nhật ngược lại panel Setup/Style từ code JS. | Mọi thao tác tạm thời của người xem (sort runtime, search text, ẩn cột) được lưu trong biến bộ nhớ `runtimeState`. |
+| **6. Không có Dynamic UI Trong Tab Style** | Schema `index.json` là tĩnh, không thể tự sinh ra N ô chọn cấu hình tương ứng với N cột dữ liệu người dùng kéo thả. | Định nghĩa sẵn các Slot nhóm cố định (Nhóm 1–3) hoặc dùng chuỗi `TEXTINPUT` cú pháp (`Doanh Thu:avg, Số Lượng:sum`). |
+| **7. Bị Cách Ly Iframe Hoàn Toàn (Cross-Origin Sandbox)** | Không thể đọc URL trang cha, không thể mở modal đè lên UI Looker Studio, không thể can thiệp sự kiện chuột của Bounding Box bên ngoài. | Dựng UI Modal/Popup nội bộ bên trong `#excelviz-app-root` và tối ưu render với `requestAnimationFrame`. |
+| **8. Không Truy Cập Được Dữ Liệu Gốc Chưa Group (Raw Underlying Data)** | Data gửi về đã bị tổng hợp/group theo các Dimension trong Setup. Không thể xem dữ liệu chi tiết nếu trường đó không được gán vào Setup. | Người thiết kế báo cáo bắt buộc phải kéo đầy đủ các Dimension chi tiết cần thiết vào Setup. |
+

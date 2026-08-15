@@ -1036,19 +1036,26 @@ function renderTable() {
         }
         if (!['sum', 'avg', 'min', 'max', 'count'].includes(summaryType)) summaryType = 'sum';
 
-        // Parse per-column summary config: "m1:sum,m2:avg,m3:min"
-        // → metricAggOverrides = { 0: 'sum', 1: 'avg', 2: 'min' } (0-based metric position)
-        const metricAggOverrides = {};
+        // Parse per-column summary config: "Doanh Thu:avg, Số Lượng:sum, don gia:min"
+        // Hỗ trợ trực tiếp:
+        // 1. Tên cột hiển thị (Tiếng Việt có dấu / không dấu / không phân biệt hoa thường): "Doanh Thu:avg", "so luong:sum"
+        // 2. Mã trường (Field ID): "qt_met1:min"
+        const metricAggOverridesByName = {};
         try {
             const perColRaw = (styleConfig.perColumnSummary && styleConfig.perColumnSummary.value !== undefined)
                 ? String(styleConfig.perColumnSummary.value).trim() : '';
             if (perColRaw) {
                 perColRaw.split(',').forEach(part => {
-                    // Hỗ trợ: m1:sum / M2:AVG / m 3 : min (flexible)
-                    const m = part.trim().match(/^m\s*(\d+)\s*:\s*(sum|avg|min|max|count)$/i);
-                    if (m) {
-                        const idx = parseInt(m[1], 10) - 1; // m1 → index 0
-                        if (idx >= 0) metricAggOverrides[idx] = m[2].toLowerCase();
+                    const trimmed = part.trim();
+                    if (!trimmed) return;
+                    const lastColonIdx = trimmed.lastIndexOf(':');
+                    if (lastColonIdx !== -1) {
+                        const colKey = trimmed.substring(0, lastColonIdx).trim();
+                        const aggVal = trimmed.substring(lastColonIdx + 1).trim().toLowerCase();
+                        if (['sum', 'avg', 'min', 'max', 'count'].includes(aggVal) && colKey) {
+                            metricAggOverridesByName[colKey.toLowerCase()] = aggVal;
+                            metricAggOverridesByName[remove_accents(colKey)] = aggVal;
+                        }
                     }
                 });
             }
@@ -1171,15 +1178,22 @@ function renderTable() {
         const summaryValues = {};
         const colSummaryTypeMap = {};
         if (showSummaryRow && sortedRows.length > 0) {
-            let metricPosition = 0; // đếm thứ tự metric (m1=0, m2=1, m3=2, ...)
             visibleColumns.forEach(col => {
                 if (col.isMetric) {
-                    // Ưu tiên 1: text config "m1:sum,m2:avg" từ Style panel
+                    const colNameLower = (col.name || '').trim().toLowerCase();
+                    const colNameNoAccent = remove_accents(col.name || '');
+                    const colFieldId = (col.fieldId || '').trim().toLowerCase();
+
+                    // Ưu tiên 1: Ghi đè theo tên cột / không dấu / fieldId trong perColumnSummary
                     // Ưu tiên 2: field.aggregation từ Looker Studio metadata
                     // Ưu tiên 3: global summaryType dropdown
-                    const colAggType = metricAggOverrides[metricPosition] || col.fieldSummaryType || summaryType;
+                    const manualOverride = metricAggOverridesByName[colNameLower]
+                        || metricAggOverridesByName[colNameNoAccent]
+                        || metricAggOverridesByName[colFieldId]
+                        || null;
+
+                    const colAggType = manualOverride || col.fieldSummaryType || summaryType;
                     colSummaryTypeMap[col.fieldId] = colAggType;
-                    metricPosition++;
 
                     let colSum = 0;
                     let colMin = Infinity;
