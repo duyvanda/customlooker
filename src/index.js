@@ -1338,6 +1338,7 @@ function renderTable() {
                     const colNameLower = (col.name || '').trim().toLowerCase();
                     const colNameNoAccent = remove_accents(col.name || '');
                     const colFieldId = (col.fieldId || '').trim().toLowerCase();
+                    const colNumFmt = columnNumberFormatMap[colNameLower] || columnNumberFormatMap[colNameNoAccent] || columnNumberFormatMap[colFieldId] || '';
 
                     // Ưu tiên 1: Ghi đè theo tên cột / không dấu / fieldId trong perColumnSummary
                     // Ưu tiên 2: field.aggregation từ Looker Studio metadata
