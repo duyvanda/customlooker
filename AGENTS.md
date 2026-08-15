@@ -65,12 +65,10 @@ Looker Studio (Google Data Studio) mặc định không hỗ trợ nút bấm tr
 - **Các trường thành phần:**
   1. `Dimension` (type `DIMENSION`, min 0, max 50): Danh sách cột thứ nguyên hiển thị.
   2. `Metric` (type `METRIC`, min 0, max 50): Danh sách cột chỉ số hiển thị.
-  3. `Freeze Dimension` (type `DIMENSION`, min 0, max 10): Cột thứ nguyên ghim cố định bên trái khi cuộn ngang (chỉ áp dụng cho Dimension).
-  4. `Search Dimension` (type `DIMENSION`, min 0, max 10): Cột thứ nguyên quét tìm kiếm (nếu để trống, tự động quét tất cả các cột hiển thị).
-  5. `Sort Dimension (1–3)` (type `DIMENSION`, min 0, max 3): Cột Dimension ưu tiên sắp xếp cấp 1 đến 3.
-  6. `Sort Metric (1–3)` (type `METRIC`, min 0, max 3): Cột Metric ưu tiên sắp xếp cấp 1 đến 3.
-  7. `Conditional Dimension (1–3)` (type `DIMENSION`, min 0, max 3): Cột Dimension gán cho Quy tắc màu 1–3.
-  8. `Conditional Metric (1–3)` (type `METRIC`, min 0, max 3): Cột Metric gán cho Quy tắc màu 1–3.
+  3. `Freeze Dimension` (type `DIMENSION`, min 0, max 10): Cột thứ nguyên ghim cố định bên trái khi cuộn ngang (chỉ áp dụng cho Dimension, không dùng Freeze Metric).
+  4. `Search Dimension` (type `DIMENSION`, min 0, max 10): Cột thứ nguyên quét tìm kiếm (nếu không chọn trường nào, Viz sẽ tự động ẩn thanh tìm kiếm).
+  5. `Sort 1–3 Dimension / Metric` (type `DIMENSION`/`METRIC`, min 0, max 1 mỗi cấp): Mỗi cấp độ sắp xếp 1–3 cho phép chọn 1 Dimension hoặc 1 Metric tương ứng.
+  6. `Rule 1–3 Dimension / Metric` (type `DIMENSION`/`METRIC`, min 0, max 1 mỗi quy tắc): Ràng buộc rõ ràng từng Dimension/Metric cho từng Quy tắc màu 1–3.
 
 ### 3.2. Quy tắc Tab Style trong `index.json`
 - **Thứ tự các Section trong Style:**
@@ -99,15 +97,16 @@ Looker Studio (Google Data Studio) mặc định không hỗ trợ nút bấm tr
 
 ### 3.3. Quy tắc Cố Định Cột (Sticky Freeze Columns)
 - Chỉ nhận các cột nằm trong `Freeze Dimension`.
-- Hàm `findRawIndexForField` luôn so sánh cả `field.name` và `field.id` để loại bỏ sai lệch ID nội bộ do Looker Studio sinh ra giữa các concept.
-- `applyFrozenColumnOffsets` tự động duyệt qua các cột frozen, tính toán giá trị `th.style.left` và `td.style.left` tích lũy theo chiều rộng thực tế của các cột trước đó.
-- Cột frozen cuối cùng tự động được gắn class `.frozen-column-last` để hiển thị đường viền ngăn cách `#94a3b8` và hiệu ứng đổ bóng mượt mà.
+- Hiển thị icon `📌` tại tiêu đề cột được freeze.
+- Hàm `findRawIndexForField` ưu tiên so sánh `field.id` trước rồi mới fallback `field.name` để loại bỏ sai lệch khi đổi tên cột trên Looker Studio.
+- Tự động gắn `ResizeObserver` để tính toán lại offset `left` khi bảng thay đổi kích thước.
+- Cột frozen cuối cùng tự động được gắn class `.frozen-column-last` tạo đường viền ngăn cách `#94a3b8` và hiệu ứng đổ bóng.
 
 ### 3.4. Quy tắc Xuất File Excel (`downloader.html`)
-- **Bảo toàn số 0 ở đầu:** Với các chuỗi bắt đầu bằng `0` và có từ 2 ký tự số trở lên (như số điện thoại `0912345678`, mã nhân viên `0012`...), ô Excel luôn được thiết lập `t: 's'` (Text) kèm format `@` (`z: '@'`), ngăn chặn tuyệt đối tình trạng Excel tự đổi thành số và làm mất số 0.
+- **Bảo toàn số 0 ở đầu:** Với các chuỗi bắt đầu bằng `0` và có từ 2 ký tự số trở lên, ô Excel luôn được thiết lập `t: 's'` (Text) kèm format `@` (`z: '@'`).
+- **Xuất chính xác dữ liệu lọc:** Luôn xuất mảng dòng đang hiển thị theo bộ lọc tìm kiếm (`sortedRows`), không fallback toàn bộ raw data khi tìm kiếm ra 0 dòng.
 - **Tự động mở rộng cột:** Tự động tính toán độ dài lớn nhất của text trong từng cột để đặt `ws['!cols'] = [{ wch: maxLen + 3 }]`.
 - **Date Range nguyên bản:** Nhận nguyên bản `data.dateRanges.DEFAULT` từ Looker Studio API (`start` & `end`), hiển thị dạng JSON và có nút sao chép tiện lợi.
-- **Tài liệu phân tích chuyên sâu:** Chi tiết về giới hạn sandbox `allow-downloads` và giải pháp cho Android WebView xem tại file riêng: [`EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md`](file:///D:/customLooker/EXPORT_SANDBOX_AND_WEBVIEW_ANALYSIS.md).
 
 ---
 

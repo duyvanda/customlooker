@@ -1,11 +1,12 @@
 // Import thư viện Looker Studio Community Viz SDK
 import * as dscc from '@google/dscc';
 
-// Biến trạng thái runtime trong bộ nhớ JS (Hoàn toàn không dùng storage / localStorage / bridge)
+// Biến trạng thái runtime trong bộ nhớ JS
 let currentData = null;
+let currentResizeObserver = null;
 
 const runtimeState = {
-    sortOverride: null,       // { rawIndex: number, name: string, direction: 'asc'|'desc' } | null
+    sortOverride: null,       // { fieldId: string, direction: 'asc'|'desc' } | null
     currentPage: 1,
     pageSizeOverride: null,   // number | null (null: dùng default từ Style)
     hiddenColumns: new Set(), // Set chứa fieldId hoặc tên cột bị ẩn tạm thời trong runtime
@@ -34,58 +35,15 @@ try {
     window.addEventListener('mousedown', () => { try { window.focus(); } catch (e) { } });
 } catch (e) { }
 
-// HÀM HIỂN THỊ TOAST THÔNG BÁO NHANH
-function showToast(message) {
-    try {
-        const existingToast = document.querySelector('.viz-toast');
-        if (existingToast) existingToast.remove();
-
-        const toast = document.createElement('div');
-        toast.className = 'viz-toast';
-        toast.innerHTML = `<span>✓</span><span>${message}</span>`;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            if (toast) toast.remove();
-        }, 2800);
-    } catch (e) {
-        console.log('[ExcelViz] toast:', message);
-    }
-}
-
-// HÀM COPY VĂN BẢN VÀO CLIPBOARD
-function copyTextToClipboard(text, successMsg) {
-    if (!text && text !== 0) {
-        showToast('Không có dữ liệu để copy!');
-        return;
-    }
-    const str = String(text);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(str).then(() => {
-            showToast(successMsg || 'Đã copy vào clipboard!');
-        }).catch(() => {
-            fallbackCopyText(str, successMsg);
-        });
-    } else {
-        fallbackCopyText(str, successMsg);
-    }
-}
-
-function fallbackCopyText(text, successMsg) {
-    try {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-9999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast(successMsg || 'Đã copy vào clipboard!');
-    } catch (err) {
-        prompt('Copy nội dung:', text);
-    }
+// HÀM ESCAPE HTML CHỐNG XSS VÀ LỖI VỠ DOM
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 // HÀM CHUẨN HÓA BỎ DẤU TIẾNG VIỆT
@@ -228,10 +186,10 @@ function formatDateValue(val, fmtStyle = 'date') {
 }
 
 // HÀM TRÍCH XUẤT THÔNG TIN DATE RANGE NGUYÊN BẢN TỪ LOOKER STUDIO API
-function extractActiveFilterInfo(currentData) {
+function extractActiveFilterInfo(data) {
     const filterInfo = {};
-    if (currentData && currentData.dateRanges && currentData.dateRanges.DEFAULT) {
-        filterInfo.dateRange = currentData.dateRanges.DEFAULT;
+    if (data && data.dateRanges && data.dateRanges.DEFAULT) {
+        filterInfo.dateRange = data.dateRanges.DEFAULT;
     }
     return filterInfo;
 }
@@ -261,34 +219,70 @@ function compareValues(a, b, fieldType = '') {
     return new Intl.Collator('vi', { numeric: true, sensitivity: 'base' }).compare(strA, strB);
 }
 
-// HÀM TÌM RAW INDEX CỦA FIELD TỪ DATA HEADERS (ƯU TIÊN THEO NAME RỒI MỚI THEO ID)
+// HÀM TÌM RAW INDEX CỦA FIELD TỪ DATA HEADERS (ƯU TIÊN ID TRƯỚC -> NAME FALLBACK)
 function findRawIndexForField(field, allHeaders) {
     if (!field || !allHeaders || !Array.isArray(allHeaders)) return -1;
-    const targetName = (field.name || '').trim().toLowerCase();
     const targetId = (field.id || '').trim();
+    const targetName = (field.name || '').trim().toLowerCase();
 
-    if (targetName) {
-        const idx = allHeaders.findIndex(h => h && (h.name || '').trim().toLowerCase() === targetName);
+    // 1. Ưu tiên tuyệt đối khớp theo field.id trước
+    if (targetId) {
+        const idx = allHeaders.findIndex(h => h && h.id === targetId);
         if (idx !== -1) return idx;
     }
 
-    if (targetId) {
-        const idx = allHeaders.findIndex(h => h && h.id === targetId);
+    // 2. Fallback theo field.name
+    if (targetName) {
+        const idx = allHeaders.findIndex(h => h && (h.name || '').trim().toLowerCase() === targetName);
         if (idx !== -1) return idx;
     }
 
     return -1;
 }
 
+// HÀM TẬP TRUNG TÌM CỘT BẢNG TỪ FIELD (CENTRALIZED FIELD RESOLVER: field.id -> field.name)
+function findTableColumnByField(field, tableColumns) {
+    if (!field || !Array.isArray(tableColumns)) return null;
+    const targetId = (field.id || '').trim();
+    const targetName = (field.name || '').trim().toLowerCase();
+
+    if (targetId) {
+        const match = tableColumns.find(col => col.fieldId && col.fieldId === targetId);
+        if (match) return match;
+    }
+
+    if (targetName) {
+        const match = tableColumns.find(col => col.name && col.name.trim().toLowerCase() === targetName);
+        if (match) return match;
+    }
+
+    return null;
+}
+
+// HÀM VALIDATE SLOT SETUP (CHỈ CHO PHÉP CHỌN DIMENSION HOẶC METRIC TRÊN MỘT SLOT)
+function resolveSingleSetupField(dimensionField, metricField, label) {
+    if (dimensionField && metricField) {
+        return {
+            field: null,
+            error: `${label}: Chỉ được chọn Dimension hoặc Metric, không chọn cả hai.`
+        };
+    }
+    return {
+        field: dimensionField || metricField || null,
+        error: null
+    };
+}
+
 // HÀM TRÍCH XUẤT CÁC CỘT HIỂN THỊ CỦA BẢNG (DIMENSIONS + METRICS TỪ SETUP)
-function extractTableColumns(currentData) {
-    if (!currentData) return [];
-    const fields = currentData.fields || {};
-    const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
-        ? currentData.tables.DEFAULT.headers
+function extractTableColumns(data) {
+    if (!data) return [];
+    const fields = data.fields || {};
+    const allHeaders = (data.tables && data.tables.DEFAULT && Array.isArray(data.tables.DEFAULT.headers))
+        ? data.tables.DEFAULT.headers
         : [];
     const cols = [];
 
+    // 1. Dimensions
     if (fields.dimensions && Array.isArray(fields.dimensions)) {
         fields.dimensions.forEach((f, fIdx) => {
             if (!f) return;
@@ -305,11 +299,13 @@ function extractTableColumns(currentData) {
         });
     }
 
+    // 2. Metrics (Fallback index tính từ metricStartIndex cố định, tránh nhảy index)
+    const metricStartIndex = cols.length;
     if (fields.metrics && Array.isArray(fields.metrics)) {
         fields.metrics.forEach((f, fIdx) => {
             if (!f) return;
             const rawIdx = findRawIndexForField(f, allHeaders);
-            const actualIdx = rawIdx !== -1 ? rawIdx : (cols.length + fIdx);
+            const actualIdx = rawIdx !== -1 ? rawIdx : (metricStartIndex + fIdx);
             if (!cols.some(c => c.rawIndex === actualIdx)) {
                 cols.push({
                     fieldId: f.id || `met_${actualIdx}`,
@@ -321,6 +317,7 @@ function extractTableColumns(currentData) {
         });
     }
 
+    // 3. Fallback allHeaders nếu chưa chọn dimensions/metrics
     if (cols.length === 0 && allHeaders.length > 0) {
         allHeaders.forEach((h, idx) => {
             if (!h) return;
@@ -337,51 +334,35 @@ function extractTableColumns(currentData) {
 }
 
 // HÀM TRÍCH XUẤT CÁC CỘT TÌM KIẾM TỪ SETUP (searchFields)
-function extractSearchColumns(currentData, tableColumns) {
-    if (!currentData) return tableColumns;
-    const fields = currentData.fields || {};
+function extractSearchColumns(data, tableColumns, warnings) {
+    if (!data) return [];
+    const fields = data.fields || {};
     const setupSearchFields = fields.searchFields || [];
 
     if (Array.isArray(setupSearchFields) && setupSearchFields.length > 0) {
-        const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
-            ? currentData.tables.DEFAULT.headers
-            : [];
-
         const matchedSearchCols = [];
         setupSearchFields.forEach(sf => {
             if (!sf) return;
-            const rawIdx = findRawIndexForField(sf, allHeaders);
-            if (rawIdx !== -1 && !matchedSearchCols.some(mc => mc.rawIndex === rawIdx)) {
-                matchedSearchCols.push({
-                    fieldId: sf.id,
-                    name: sf.name || sf.id,
-                    type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || sf.type || '',
-                    rawIndex: rawIdx
-                });
+            const matchedCol = findTableColumnByField(sf, tableColumns);
+            if (matchedCol) {
+                if (!matchedSearchCols.some(mc => mc.fieldId === matchedCol.fieldId)) {
+                    matchedSearchCols.push(matchedCol);
+                }
+            } else if (warnings) {
+                const fname = sf.name || sf.id;
+                warnings.push(`Tìm kiếm: Cột "${fname}" không nằm trong danh sách Dimension/Metric của bảng.`);
             }
         });
-
-        if (matchedSearchCols.length > 0) {
-            return matchedSearchCols;
-        }
+        return matchedSearchCols;
     }
 
-    return tableColumns;
+    return [];
 }
 
-// HÀM TRÍCH XUẤT CẤU HÌNH SORT MULTI-LEVEL TỪ SETUP & STYLE (TỐI ĐA 3 CẤP)
-function extractSetupSortConfig(currentData, styleConfig) {
-    if (!currentData) return [];
-    const fields = currentData.fields || {};
-    const sortDims = Array.isArray(fields.sortDimensions) ? fields.sortDimensions : [];
-    const sortMets = Array.isArray(fields.sortMetrics) ? fields.sortMetrics : [];
-    const allSetupSort = [...sortDims, ...sortMets].slice(0, 3);
-
-    if (allSetupSort.length === 0) return [];
-
-    const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
-        ? currentData.tables.DEFAULT.headers
-        : [];
+// HÀM TRÍCH XUẤT CẤU HÌNH SORT TỪ SETUP & STYLE (TỐI ĐA 3 CẤP TƯỜNG MINH, CÓ VALIDATION)
+function extractSetupSortConfig(data, styleConfig, tableColumns, warnings) {
+    if (!data) return [];
+    const fields = data.fields || {};
 
     const directions = [
         (styleConfig.sort1Direction && styleConfig.sort1Direction.value) || 'asc',
@@ -390,48 +371,88 @@ function extractSetupSortConfig(currentData, styleConfig) {
     ];
 
     const sortLevels = [];
-    allSetupSort.forEach((sf, idx) => {
-        if (!sf) return;
-        const rawIdx = findRawIndexForField(sf, allHeaders);
-        if (rawIdx !== -1) {
-            sortLevels.push({
-                level: idx + 1,
-                fieldId: sf.id,
-                name: sf.name || sf.id,
-                rawIndex: rawIdx,
-                direction: directions[idx] || 'asc',
-                type: (allHeaders[rawIdx] && allHeaders[rawIdx].type) || sf.type || ''
-            });
+
+    for (let i = 1; i <= 3; i++) {
+        const dimField = (Array.isArray(fields[`sort${i}Dimension`]) && fields[`sort${i}Dimension`][0]) || null;
+        const metField = (Array.isArray(fields[`sort${i}Metric`]) && fields[`sort${i}Metric`][0]) || null;
+
+        const resolved = resolveSingleSetupField(dimField, metField, `Sort ${i}`);
+        if (resolved.error && warnings) {
+            warnings.push(resolved.error);
         }
-    });
+
+        let boundField = resolved.field;
+
+        // Fallback tương thích cấu hình cũ
+        if (!boundField && !resolved.error) {
+            const legacyDims = Array.isArray(fields.sortDimensions) ? fields.sortDimensions : [];
+            const legacyMets = Array.isArray(fields.sortMetrics) ? fields.sortMetrics : [];
+            const legacyList = [...legacyDims, ...legacyMets];
+            boundField = legacyList[i - 1] || null;
+        }
+
+        if (boundField) {
+            const matchedCol = findTableColumnByField(boundField, tableColumns);
+            if (matchedCol && matchedCol.rawIndex >= 0) {
+                sortLevels.push({
+                    level: i,
+                    fieldId: matchedCol.fieldId,
+                    name: matchedCol.name,
+                    rawIndex: matchedCol.rawIndex,
+                    direction: directions[i - 1] || 'asc',
+                    type: matchedCol.type || ''
+                });
+            } else if (warnings) {
+                const fname = boundField.name || boundField.id || `Cột ${i}`;
+                warnings.push(`Sort ${i}: Cột "${fname}" không nằm trong danh sách Dimension/Metric của bảng.`);
+            }
+        }
+    }
 
     return sortLevels;
 }
 
-// HÀM TRÍCH XUẤT QUY TẮC TÔ MÀU / BADGE TỪ SETUP & STYLE (RULES 1–3)
-function extractSetupConditionalRules(currentData, styleConfig) {
-    if (!currentData) return [];
-    const fields = currentData.fields || {};
-    const condDims = Array.isArray(fields.conditionalFields) ? fields.conditionalFields : [];
-    const condMets = Array.isArray(fields.conditionalMetricFields) ? fields.conditionalMetricFields : [];
-    const allSetupCond = [...condDims, ...condMets].slice(0, 3);
-
-    const allHeaders = (currentData.tables && currentData.tables.DEFAULT && Array.isArray(currentData.tables.DEFAULT.headers))
-        ? currentData.tables.DEFAULT.headers
-        : [];
-
+// HÀM TRÍCH XUẤT QUY TẮC TÔ MÀU / BADGE TỪ SETUP & STYLE (P0: HARDEN MAPPING, STRICT VALIDATION)
+function extractSetupConditionalRules(data, styleConfig, tableColumns, warnings) {
+    if (!data) return [];
+    const fields = data.fields || {};
     const rules = [];
+
     for (let i = 1; i <= 3; i++) {
         const enabled = styleConfig[`rule${i}_enable`] && styleConfig[`rule${i}_enable`].value === true;
         if (!enabled) continue;
 
-        const boundField = allSetupCond[i - 1];
-        let rawIdx = -1;
-        let fieldName = '*';
+        const dimField = (Array.isArray(fields[`rule${i}Dimension`]) && fields[`rule${i}Dimension`][0]) || null;
+        const metField = (Array.isArray(fields[`rule${i}Metric`]) && fields[`rule${i}Metric`][0]) || null;
 
-        if (boundField) {
-            rawIdx = findRawIndexForField(boundField, allHeaders);
-            fieldName = boundField.name || boundField.id;
+        const resolved = resolveSingleSetupField(dimField, metField, `Quy tắc ${i}`);
+        if (resolved.error && warnings) {
+            warnings.push(resolved.error);
+        }
+
+        let boundField = resolved.field;
+
+        // Fallback tương thích cấu hình cũ
+        if (!boundField && !resolved.error) {
+            const legacyDims = Array.isArray(fields.conditionalFields) ? fields.conditionalFields : [];
+            const legacyMets = Array.isArray(fields.conditionalMetricFields) ? fields.conditionalMetricFields : [];
+            const legacyList = [...legacyDims, ...legacyMets];
+            boundField = legacyList[i - 1] || null;
+        }
+
+        // Rule bật nhưng chưa chọn field -> SKIP
+        if (!boundField) {
+            continue;
+        }
+
+        const matchedCol = findTableColumnByField(boundField, tableColumns);
+        if (!matchedCol || matchedCol.rawIndex < 0) {
+            // Field không map được vào Table Data -> SKIP & báo warning
+            if (warnings) {
+                const fname = boundField.name || boundField.id || `Cột ${i}`;
+                warnings.push(`Quy tắc ${i}: Cột "${fname}" không nằm trong danh sách Dimension/Metric của bảng.`);
+            }
+            continue;
         }
 
         const operator = (styleConfig[`rule${i}_operator`] && styleConfig[`rule${i}_operator`].value) || 'contains';
@@ -441,8 +462,9 @@ function extractSetupConditionalRules(currentData, styleConfig) {
 
         rules.push({
             ruleIndex: i,
-            rawIndex: rawIdx,
-            fieldName: fieldName,
+            rawIndex: matchedCol.rawIndex,
+            fieldId: matchedCol.fieldId,
+            fieldName: matchedCol.name,
             operator: operator,
             value: value,
             value2: value2,
@@ -463,7 +485,7 @@ function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
     const strNormalized = remove_accents(str);
 
     for (const rule of rules) {
-        if (rule.rawIndex !== -1 && rule.rawIndex !== rawIdx) {
+        if (rule.rawIndex !== rawIdx) {
             continue;
         }
 
@@ -515,7 +537,7 @@ function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
     return null;
 }
 
-// HÀM FORMAT CELL TOÀN DIỆN
+// HÀM FORMAT CELL TOÀN DIỆN VÀ ESCAPE HTML AN TOÀN
 function formatTableCell(rawIdx, val, rules, fieldType = '') {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
@@ -533,29 +555,32 @@ function formatTableCell(rawIdx, val, rules, fieldType = '') {
         formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
     }
 
+    const safeStr = escapeHtml(str);
+    const safeFormattedVal = escapeHtml(formattedVal);
+
     const ruleStyle = evaluateConditionalRule(rawIdx, val, rules, fieldType);
     if (ruleStyle) {
-        if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${str}</span>`;
-        if (ruleStyle === 'badge_danger') return `<span class="badge badge-danger">✕ ${str}</span>`;
-        if (ruleStyle === 'badge_warning') return `<span class="badge badge-warning">⏳ ${str}</span>`;
-        if (ruleStyle === 'badge_info') return `<span class="badge badge-info">${str}</span>`;
-        if (ruleStyle === 'badge_gray') return `<span class="badge badge-default">${str}</span>`;
-        if (ruleStyle === 'color_green') return `<span class="color-green">${formattedVal}</span>`;
-        if (ruleStyle === 'color_red') return `<span class="color-red">${formattedVal}</span>`;
-        if (ruleStyle === 'color_amber') return `<span class="color-amber">${formattedVal}</span>`;
-        if (ruleStyle === 'color_cyan') return `<span class="color-cyan">${formattedVal}</span>`;
+        if (ruleStyle === 'badge_success') return `<span class="badge badge-success">✓ ${safeStr}</span>`;
+        if (ruleStyle === 'badge_danger') return `<span class="badge badge-danger">✕ ${safeStr}</span>`;
+        if (ruleStyle === 'badge_warning') return `<span class="badge badge-warning">⏳ ${safeStr}</span>`;
+        if (ruleStyle === 'badge_info') return `<span class="badge badge-info">${safeStr}</span>`;
+        if (ruleStyle === 'badge_gray') return `<span class="badge badge-default">${safeStr}</span>`;
+        if (ruleStyle === 'color_green') return `<span class="color-green">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'color_red') return `<span class="color-red">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'color_amber') return `<span class="color-amber">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'color_cyan') return `<span class="color-cyan">${safeFormattedVal}</span>`;
         if (ruleStyle === 'color_pos_neg') {
             return (isNum && num < 0)
-                ? `<span class="color-pos-neg-neg">${formattedVal}</span>`
-                : `<span class="color-pos-neg-pos">${formattedVal}</span>`;
+                ? `<span class="color-pos-neg-neg">${safeFormattedVal}</span>`
+                : `<span class="color-pos-neg-pos">${safeFormattedVal}</span>`;
         }
     }
 
-    return formattedVal;
+    return safeFormattedVal;
 }
 
 // HÀM TÍNH TOÁN LEFT OFFSET VÀ CỐ ĐỊNH CỘT (STICKY FROZEN COLUMNS)
-function applyFrozenColumnOffsets(table, showSTT) {
+function applyFrozenColumnOffsets(table) {
     if (!table) return;
     try {
         const theadRow = table.querySelector('thead tr');
@@ -589,7 +614,7 @@ function applyFrozenColumnOffsets(table, showSTT) {
             }
         });
 
-        // Đánh dấu cột frozen cuối cùng để tạo đường ranh giới đổ bóng đẹp mắt
+        // Đánh dấu cột frozen cuối cùng
         thList.forEach((th, colIdx) => {
             if (colIdx === lastFrozenColIdx) {
                 th.classList.add('frozen-column-last');
@@ -610,30 +635,43 @@ function applyFrozenColumnOffsets(table, showSTT) {
     }
 }
 
-
+// HÀM GẮN RESIZEOBSERVER TỰ ĐỘNG CẬP NHẬT KHI RESIZE CONTAINER
+function setupResizeObserver(element, callback) {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (currentResizeObserver) {
+        currentResizeObserver.disconnect();
+    }
+    currentResizeObserver = new ResizeObserver(() => {
+        callback();
+    });
+    currentResizeObserver.observe(element);
+}
 
 // HÀM MỞ POPUP ẨN/HIỆN CỘT RUNTIME (TỰ KHÔI PHỤC KHI F5)
 function openRuntimeColumnsPopup(tableColumns) {
     try {
+        const existingModal = document.getElementById('runtime-columns-modal');
+        if (existingModal) existingModal.remove();
+
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'runtime-columns-modal';
 
         overlay.innerHTML = `
-            <div class="modal-dialog" style="max-width: 480px;">
+            <div class="modal-dialog modal-dialog-col-config">
                 <div class="modal-header">
-                    <span style="font-weight: 700; font-size: 13px; color: #0f172a;">👁️ Ẩn / Hiện Cột Hiển Thị (Runtime)</span>
+                    <span class="modal-title">👁️ Cột hiển thị</span>
                     <button class="modal-close-btn" id="btn-close-col-modal">✕</button>
                 </div>
-                <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
-                    <div style="font-size: 11.5px; color: #64748b; margin-bottom: 8px;">
-                        💡 Tích chọn các cột cần xem. Trạng thái chỉ áp dụng trong phiên xem và tự động khôi phục khi F5.
+                <div class="modal-body col-config-scroll-area">
+                    <div class="modal-subtitle">
+                        Thay đổi chỉ áp dụng trong phiên xem và sẽ khôi phục khi tải lại trang.
                     </div>
                     <table class="col-config-table">
                         <thead>
                             <tr>
-                                <th style="width: 45px; text-align: center;">STT</th>
-                                <th style="width: 50px; text-align: center;">Hiện</th>
+                                <th class="col-config-stt">STT</th>
+                                <th class="col-config-chk-cell">Hiện</th>
                                 <th>Tên Cột (Looker Setup)</th>
                             </tr>
                         </thead>
@@ -642,11 +680,11 @@ function openRuntimeColumnsPopup(tableColumns) {
                                 const isVisible = !runtimeState.hiddenColumns.has(col.fieldId) && !runtimeState.hiddenColumns.has(col.name);
                                 return `
                                     <tr>
-                                        <td style="text-align: center; color: #64748b; font-weight: 700;">${idx + 1}</td>
-                                        <td style="text-align: center;">
-                                            <input type="checkbox" class="runtime-col-chk" data-field-id="${col.fieldId}" data-field-name="${col.name}" ${isVisible ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+                                        <td class="col-config-stt">${idx + 1}</td>
+                                        <td class="col-config-chk-cell">
+                                            <input type="checkbox" class="runtime-col-chk col-config-chk" data-field-id="${escapeHtml(col.fieldId)}" data-field-name="${escapeHtml(col.name)}" ${isVisible ? 'checked' : ''}>
                                         </td>
-                                        <td style="font-weight: 600; color: #0f172a;">${col.name}</td>
+                                        <td class="col-config-name">${escapeHtml(col.name)}</td>
                                     </tr>
                                 `;
                             }).join('')}
@@ -655,7 +693,7 @@ function openRuntimeColumnsPopup(tableColumns) {
                 </div>
                 <div class="modal-footer">
                     <button class="btn-modal-reset" id="btn-show-all-cols">Hiện tất cả</button>
-                    <div style="display: flex; gap: 8px;">
+                    <div class="modal-footer-actions">
                         <button class="btn-modal-save" id="btn-apply-col-modal">Xong</button>
                     </div>
                 </div>
@@ -693,7 +731,7 @@ function openRuntimeColumnsPopup(tableColumns) {
     }
 }
 
-// HÀM RENDER BẢNG CHÍNH VÀO #EXCELVIZ-APP-ROOT THEO PIPELINE CHUẨN
+// HÀM RENDER BẢNG CHÍNH THEO PIPELINE CHUẨN
 function renderTable() {
     try {
         if (!currentData) return;
@@ -705,18 +743,30 @@ function renderTable() {
         const wasFocused = (document.activeElement === prevSearchInput);
         const cursorPosition = prevSearchInput ? prevSearchInput.selectionStart : null;
 
-        // 1. TRÍCH XUẤT CÁC CỘT BẢNG TỪ SETUP
+        // 1. TRÍCH XUẤT SCHEMA CỘT VÀ QUY TẮC
         const styleConfig = currentData.style || {};
         const fields = currentData.fields || {};
-        const tableColumns = extractTableColumns(currentData);
-        const searchColumns = extractSearchColumns(currentData, tableColumns);
-        const setupSortLevels = extractSetupSortConfig(currentData, styleConfig);
-        const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig);
+        const configWarnings = [];
+        const searchColumns = extractSearchColumns(currentData, tableColumns, configWarnings);
+        const setupSortLevels = extractSetupSortConfig(currentData, styleConfig, tableColumns, configWarnings);
+        const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig, tableColumns, configWarnings);
 
-        // Trích xuất danh sách Dimension cần Cố định cột (Freeze Columns) từ Setup - Kiểm tra CẢ NAME và ID
+        // Trích xuất Freeze Dimensions (Chỉ áp dụng cho Dimension)
         const freezeDims = Array.isArray(fields.freezeDimensions) ? fields.freezeDimensions : [];
-        const freezeNames = new Set(freezeDims.map(f => (f.name || '').trim().toLowerCase()).filter(Boolean));
-        const freezeIds = new Set(freezeDims.map(f => (f.id || '').trim()).filter(Boolean));
+        const freezeFieldIds = new Set();
+        const freezeNames = new Set();
+
+        freezeDims.forEach(f => {
+            if (!f) return;
+            const matched = findTableColumnByField(f, tableColumns);
+            if (matched) {
+                freezeFieldIds.add(matched.fieldId);
+                freezeNames.add((matched.name || '').trim().toLowerCase());
+            } else {
+                const fname = f.name || f.id;
+                configWarnings.push(`Cố định cột: Cột "${fname}" không nằm trong danh sách Dimension/Metric của bảng.`);
+            }
+        });
 
         const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
@@ -738,10 +788,10 @@ function renderTable() {
         // 2. XÁC ĐỊNH VISIBLE COLUMNS
         const visibleColumns = tableColumns.filter(c => !runtimeState.hiddenColumns.has(c.fieldId) && !runtimeState.hiddenColumns.has(c.name));
 
-        // Đánh dấu trạng thái Freeze cho từng cột (Khớp chính xác theo name hoặc id của field trong Freeze Dimension)
+        // Đánh dấu trạng thái Freeze cho từng cột Dimension
         visibleColumns.forEach(col => {
             const colNameLower = (col.name || '').trim().toLowerCase();
-            col.isFrozen = freezeNames.has(colNameLower) || freezeIds.has(col.fieldId);
+            col.isFrozen = freezeFieldIds.has(col.fieldId) || freezeNames.has(colNameLower);
         });
 
         // 3. RAW DATA
@@ -749,12 +799,13 @@ function renderTable() {
             ? currentData.tables.DEFAULT.rows
             : [];
 
-        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING (TRÊN searchColumns TỪ SETUP)
+        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING (Chỉ chạy khi có searchColumns được cấu hình)
+        const canSearch = searchColumns.length > 0;
         const searchMode = (styleConfig.searchMode && styleConfig.searchMode.value) || 'contains';
         const caseSensitive = styleConfig.searchCaseSensitive ? styleConfig.searchCaseSensitive.value === true : false;
 
         let filteredRows = rawRows;
-        if (runtimeState.searchText && runtimeState.searchText.trim() !== '') {
+        if (canSearch && runtimeState.searchText && runtimeState.searchText.trim() !== '') {
             const queryRaw = runtimeState.searchText.trim();
             const query = caseSensitive ? queryRaw : remove_accents(queryRaw);
             const queryWords = query.split(/\s+/).filter(Boolean);
@@ -777,22 +828,26 @@ function renderTable() {
             });
         }
 
-        // 5. PIPELINE BƯỚC 2: SORTING (RUNTIME OVERRIDE HOẶC MULTI-LEVEL SETUP SORT TỐI ĐA 3 CẤP)
+        // 5. PIPELINE BƯỚC 2: SORTING (RUNTIME OVERRIDE BẰNG fieldId HOẶC MULTI-LEVEL SETUP SORT)
         let sortedRows = [...filteredRows];
 
         if (runtimeState.sortOverride) {
-            // Header click override ưu tiên 1 cột
-            const overrideRawIdx = runtimeState.sortOverride.rawIndex;
-            const dir = runtimeState.sortOverride.direction === 'desc' ? -1 : 1;
-            const targetCol = tableColumns.find(c => c.rawIndex === overrideRawIdx);
-            const colType = targetCol ? targetCol.type : '';
+            // Header click override ưu tiên 1 cột theo fieldId
+            const overrideCol = tableColumns.find(c => c.fieldId === runtimeState.sortOverride.fieldId);
+            if (overrideCol) {
+                const overrideRawIdx = overrideCol.rawIndex;
+                const dir = runtimeState.sortOverride.direction === 'desc' ? -1 : 1;
+                const colType = overrideCol.type;
 
-            sortedRows.sort((rowA, rowB) => {
-                if (!rowA && !rowB) return 0;
-                if (!rowA) return 1;
-                if (!rowB) return -1;
-                return dir * compareValues(rowA[overrideRawIdx], rowB[overrideRawIdx], colType);
-            });
+                sortedRows.sort((rowA, rowB) => {
+                    if (!rowA && !rowB) return 0;
+                    if (!rowA) return 1;
+                    if (!rowB) return -1;
+                    return dir * compareValues(rowA[overrideRawIdx], rowB[overrideRawIdx], colType);
+                });
+            } else {
+                runtimeState.sortOverride = null;
+            }
         } else if (setupSortLevels.length > 0) {
             // Multi-level sort: Cấp 1 -> Cấp 2 -> Cấp 3
             sortedRows.sort((rowA, rowB) => {
@@ -826,11 +881,22 @@ function renderTable() {
         const endIdx = pageSize === -1 ? totalRows : Math.min(startIdx + actualPageSize, totalRows);
         const pageRows = sortedRows.slice(startIdx, endIdx);
 
-        // 7. RENDER GIAO DIỆN HTML VÀO #EXCELVIZ-APP-ROOT
+        // 7. RENDER GIAO DIỆN HTML
         appRoot.innerHTML = '';
 
         const wrapper = document.createElement('div');
         wrapper.className = 'table-wrapper';
+
+        // CẢNH BÁO CẤU HÌNH KHÔNG HỢP LỆ (NẾU CÓ)
+        if (configWarnings.length > 0) {
+            const warnBox = document.createElement('div');
+            warnBox.className = 'config-warning';
+            const warnContent = configWarnings.length === 1
+                ? `⚠️ <strong>Cấu hình chưa hợp lệ:</strong> ${escapeHtml(configWarnings[0])}`
+                : `⚠️ <strong>Có ${configWarnings.length} cảnh báo cấu hình:</strong> ${escapeHtml(configWarnings.join(' | '))}`;
+            warnBox.innerHTML = warnContent;
+            wrapper.appendChild(warnBox);
+        }
 
         // TOOLBAR PHÍA TRÊN
         const toolbar = document.createElement('div');
@@ -839,12 +905,12 @@ function renderTable() {
         const toolbarLeft = document.createElement('div');
         toolbarLeft.className = 'toolbar-left';
 
-        // Nút Xuất Excel
+        // Nút Xuất Excel (Hiển thị số dòng hiện tại theo bộ lọc)
         const btnExcel = document.createElement('button');
         btnExcel.className = 'btn-excel';
         btnExcel.innerHTML = `
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="m15.5 15.5-1.4 1.4-2.1-2.1V19h-2v-4.2l-2.1 2.1-1.4-1.4 4.5-4.5 4.5 4.5z"/></svg>
-            <span>Xuất Excel (${rawRows.length.toLocaleString('vi-VN')} dòng)</span>
+            <span>Xuất Excel (${totalRows.toLocaleString('vi-VN')} dòng)</span>
         `;
         toolbarLeft.appendChild(btnExcel);
 
@@ -857,8 +923,8 @@ function renderTable() {
             toolbarLeft.appendChild(btnColPopup);
         }
 
-        // Ô Tìm kiếm
-        if (showSearch) {
+        // Ô Tìm kiếm (Chỉ hiện khi có chọn searchFields ở Setup)
+        if (showSearch && canSearch) {
             const searchBox = document.createElement('div');
             searchBox.className = 'search-box';
             searchBox.innerHTML = `
@@ -866,8 +932,8 @@ function renderTable() {
             `;
 
             let autoPlaceholder = (styleConfig.searchPlaceholder && styleConfig.searchPlaceholder.value) || 'Tìm kiếm...';
-            if (fields.searchFields && fields.searchFields.length > 0) {
-                const searchNames = fields.searchFields.map(f => f.name || f.id);
+            if (searchColumns.length > 0) {
+                const searchNames = searchColumns.map(f => f.name || f.fieldId);
                 autoPlaceholder = searchNames.length <= 3 ? `Tìm theo: ${searchNames.join(', ')}...` : `Tìm theo ${searchNames.length} cột đã chọn...`;
             }
 
@@ -885,12 +951,27 @@ function renderTable() {
             });
 
             searchBox.appendChild(searchInput);
+
+            // Nút Clear Search (×)
+            if (runtimeState.searchText) {
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'search-clear-btn';
+                clearBtn.innerHTML = '✕';
+                clearBtn.title = 'Xóa tìm kiếm';
+                clearBtn.addEventListener('click', () => {
+                    runtimeState.searchText = '';
+                    runtimeState.currentPage = 1;
+                    renderTable();
+                });
+                searchBox.appendChild(clearBtn);
+            }
+
             toolbarLeft.appendChild(searchBox);
         }
 
         toolbar.appendChild(toolbarLeft);
 
-        // Toolbar Right: Chọn Rows per page runtime
+        // Toolbar Right: Dòng / trang
         const toolbarRight = document.createElement('div');
         toolbarRight.className = 'toolbar-right';
         toolbarRight.innerHTML = `<span>Dòng/trang:</span>`;
@@ -940,45 +1021,42 @@ function renderTable() {
             const th = document.createElement('th');
             if (col.isFrozen) th.classList.add('frozen-column');
 
-            let isSorted = false;
-            let sortDir = 'asc';
+            let sortHtml = '<span class="sort-icon">↕</span>';
 
-            if (runtimeState.sortOverride && runtimeState.sortOverride.rawIndex === col.rawIndex) {
-                isSorted = true;
-                sortDir = runtimeState.sortOverride.direction;
+            if (runtimeState.sortOverride && runtimeState.sortOverride.fieldId === col.fieldId) {
+                th.classList.add('th-sorted', 'th-sorted-override');
+                const icon = runtimeState.sortOverride.direction === 'asc' ? '▲' : '▼';
+                sortHtml = `<span class="sort-icon sort-override">${icon}</span>`;
             } else if (!runtimeState.sortOverride && setupSortLevels.length > 0) {
-                const matchedLevel = setupSortLevels.find(l => l.rawIndex === col.rawIndex);
+                const matchedLevel = setupSortLevels.find(l => l.fieldId === col.fieldId || l.rawIndex === col.rawIndex);
                 if (matchedLevel) {
-                    isSorted = true;
-                    sortDir = matchedLevel.direction;
+                    th.classList.add('th-sorted');
+                    const icon = matchedLevel.direction === 'asc' ? '▲' : '▼';
+                    sortHtml = `<span class="sort-icon"><span class="sort-level">${matchedLevel.level}</span>${icon}</span>`;
                 }
             }
 
-            if (isSorted) th.classList.add('th-sorted');
-
-            let icon = '↕';
-            if (isSorted) {
-                icon = sortDir === 'asc' ? '▲' : '▼';
-            }
+            const freezeIconHtml = col.isFrozen ? '<span class="freeze-pin">📌</span>' : '';
 
             th.innerHTML = `
                 <div class="th-content">
-                    <span>${col.name}</span>
-                    <span class="sort-icon">${icon}</span>
+                    ${freezeIconHtml}
+                    <span>${escapeHtml(col.name)}</span>
+                    ${sortHtml}
                 </div>
             `;
 
             if (allowHeaderSort) {
-                // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Setup Multi-Level Sort!
+                // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Setup Multi-Level Sort
                 th.addEventListener('click', () => {
-                    if (runtimeState.sortOverride && runtimeState.sortOverride.rawIndex === col.rawIndex) {
+                    if (runtimeState.sortOverride && runtimeState.sortOverride.fieldId === col.fieldId) {
                         if (runtimeState.sortOverride.direction === 'asc') {
                             runtimeState.sortOverride.direction = 'desc';
                         } else {
                             runtimeState.sortOverride = null;
                         }
                     } else {
-                        runtimeState.sortOverride = { rawIndex: col.rawIndex, name: col.name, direction: 'asc' };
+                        runtimeState.sortOverride = { fieldId: col.fieldId, direction: 'asc' };
                     }
                     runtimeState.currentPage = 1;
                     renderTable();
@@ -1033,7 +1111,7 @@ function renderTable() {
             td.style.padding = '40px 20px';
             td.style.color = '#94a3b8';
             td.style.fontSize = '13px';
-            td.innerText = runtimeState.searchText ? 'Không tìm thấy dữ liệu phù hợp với từ khóa.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
+            td.innerText = (canSearch && runtimeState.searchText) ? 'Không tìm thấy dữ liệu phù hợp với từ khóa.' : 'Chưa có dữ liệu. Vui lòng thêm Dimension hoặc Metric.';
             tr.appendChild(td);
             tbody.appendChild(tr);
         }
@@ -1136,9 +1214,12 @@ function renderTable() {
 
         appRoot.appendChild(wrapper);
 
-        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS (CHÍNH XÁC THEO TỪNG CỘT)
-        applyFrozenColumnOffsets(table, showSTT);
-        setTimeout(() => applyFrozenColumnOffsets(table, showSTT), 60);
+        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS
+        applyFrozenColumnOffsets(table);
+        setTimeout(() => applyFrozenColumnOffsets(table), 60);
+
+        // GẮN RESIZEOBSERVER TỰ ĐỘNG CẬP NHẬT KHI RESIZE CONTAINER
+        setupResizeObserver(table, () => applyFrozenColumnOffsets(table));
 
         // KHÔI PHỤC FOCUS Ô SEARCH
         if (wasFocused) {
@@ -1163,11 +1244,16 @@ function renderTable() {
                     return;
                 }
 
+                const rowsToExport = sortedRows;
+
+                if (rowsToExport.length === 0) {
+                    alert('Không có dòng dữ liệu nào phù hợp với bộ lọc để xuất!');
+                    return;
+                }
+
                 const exportHeaders = [];
                 if (showSTT) exportHeaders.push('STT');
                 visibleColumns.forEach(c => exportHeaders.push(c.name));
-
-                const rowsToExport = sortedRows.length > 0 ? sortedRows : rawRows;
 
                 const excelRows = [];
                 const excelDataObjects = [];

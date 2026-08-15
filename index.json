@@ -41,39 +41,111 @@
                     }
                 },
                 {
-                    "id": "sortDimensions",
-                    "label": "Sort Dimension (1–3)",
+                    "id": "sort1Dimension",
+                    "label": "Sort 1 Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 3
+                        "max": 1
                     }
                 },
                 {
-                    "id": "sortMetrics",
-                    "label": "Sort Metric (1–3)",
+                    "id": "sort1Metric",
+                    "label": "Sort 1 Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
-                        "max": 3
+                        "max": 1
                     }
                 },
                 {
-                    "id": "conditionalFields",
-                    "label": "Conditional Dimension (1–3)",
+                    "id": "sort2Dimension",
+                    "label": "Sort 2 Dimension",
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 3
+                        "max": 1
                     }
                 },
                 {
-                    "id": "conditionalMetricFields",
-                    "label": "Conditional Metric (1–3)",
+                    "id": "sort2Metric",
+                    "label": "Sort 2 Metric",
                     "type": "METRIC",
                     "options": {
                         "min": 0,
-                        "max": 3
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "sort3Dimension",
+                    "label": "Sort 3 Dimension",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "sort3Metric",
+                    "label": "Sort 3 Metric",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule1Dimension",
+                    "label": "Rule 1 Dimension",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule1Metric",
+                    "label": "Rule 1 Metric",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule2Dimension",
+                    "label": "Rule 2 Dimension",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule2Metric",
+                    "label": "Rule 2 Metric",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule3Dimension",
+                    "label": "Rule 3 Dimension",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 1
+                    }
+                },
+                {
+                    "id": "rule3Metric",
+                    "label": "Rule 3 Metric",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 1
                     }
                 }
             ]
