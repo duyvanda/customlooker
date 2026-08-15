@@ -163,71 +163,46 @@ git commit -m "<Nội dung commit bằng tiếng Việt mô tả thay đổi>"
 git push origin main
 ```
 
-### 5.5. 🔄 Hướng Dẫn Đổi GCS Folder (Ví dụ: `excelchart2` → `excelchart3`)
+### 5.5. ⚠️ QUY TẮC CỐ ĐỊNH PRODUCTION MANIFEST PATH (KHÔNG ĐỔI FOLDER TÙY TIỆN)
 
-Khi cần deploy sang folder GCS mới (tránh cache cũ, hoặc tạo môi trường mới), cần cập nhật **đúng 2 file** sau:
-
-#### 📄 File 1: [`manifest.json`](file:///D:/customLooker/manifest.json)
-
-Đổi tất cả 3 đường dẫn trong `resource` + kiểm tra `devMode`:
-```json
-"resource": {
-    "js":     "gs://analytics_merap/excelchart3/index.bundle.js",
-    "css":    "gs://analytics_merap/excelchart3/index.css",
-    "config": "gs://analytics_merap/excelchart3/index.json"
-},
-"devMode": false
-```
-> ⚠️ **Lưu ý `devMode`:**
-> - `devMode: true`  → Tắt cache CDN, dùng khi **đang phát triển/test** (tốc độ chậm hơn ~2-3s).
-> - `devMode: false` → Bật Google Edge CDN cache, dùng khi **production** (tốc độ nhanh nhất).
+> [!CAUTION]
+> **TUYỆT ĐỐI KHÔNG tùy tiện tăng số folder GCS (ví dụ: `excelchart2` → `excelchart3` → `excelchart4`) khi cập nhật tính năng thông thường!**
+> 
+> **Lý do:** Tất cả các báo cáo Looker Studio hiện có của doanh nghiệp đều đang liên kết cố định với một Manifest Path (ví dụ `gs://analytics_merap/excelchart3`). Nếu đổi sang folder mới, **toàn bộ báo cáo cũ sẽ bị "lủng" — không tự động nhận được tính năng mới hoặc bản sửa lỗi**, trừ khi phải vào từng trang báo cáo để đổi lại thủ công từng chart một!
 
 ---
 
-#### 📄 File 2: [`src/index.js`](file:///D:/customLooker/src/index.js#L103)
+### 5.6. 🔄 Cơ Chế Cập Nhật Code Production (`devMode: false`) Không Dính Cache & Không Làm Lủng Chart Cũ
 
-Đổi hằng số `DOWNLOADER_URL` ở **dòng ~103**:
-```js
-const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart3/downloader.html';
-```
+Để giữ nguyên **Manifest Path duy nhất cho toàn bộ hệ thống báo cáo** mà vẫn ép Google Edge CDN nhận code mới ngay lập tức:
 
----
-
-#### 🚀 Lệnh Deploy Sau Khi Đổi Folder
-
-```powershell
-# 1. Build lại bundle
-npm run build
-
-# 2. Deploy lên folder GCS mới
-gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.js" "index.css" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
-```
-
----
-
-#### 🔧 Cập Nhật Trên Looker Studio
-
-Sau khi deploy xong, vào Looker Studio:
-1. Mở báo cáo → Bấm **Edit** (chỉnh sửa).
-2. Chọn vào Custom Viz → bấm nút **⋮** (ba chấm) → **Edit chart**.
-3. Trong phần cài đặt Community Visualization → cập nhật **Manifest Path** sang:
+#### 🎯 Cách 1: File Versioning bên trong cùng 1 Folder GCS (Khuyên dùng)
+Giữ nguyên thư mục GCS (ví dụ `excelchart3`), chỉ đổi tên file bundle JS/CSS bên trong `manifest.json`:
+1. Build webpack ra tên file bundle có version: `index.bundle.v3.1.js`.
+2. Trong [`manifest.json`](file:///D:/customLooker/manifest.json) (vẫn nằm ở `excelchart3`), trỏ tới file mới:
+   ```json
+   "resource": {
+       "js": "gs://analytics_merap/excelchart3/index.bundle.v3.1.js",
+       "css": "gs://analytics_merap/excelchart3/index.v3.1.css",
+       "config": "gs://analytics_merap/excelchart3/index.json"
+   }
    ```
-   gs://analytics_merap/excelchart3
-   ```
-4. Bấm **Save** → Looker Studio sẽ tải lại chart từ folder mới.
+3. **Kết quả:**
+   - Manifest Path của báo cáo trên Looker Studio (`gs://analytics_merap/excelchart3`) **giữ nguyên 100%** ➔ Toàn bộ chart cũ tự động cập nhật.
+   - File JS là tên mới (`v3.1`) ➔ Google Edge CDN **chưa từng thấy file này** ➔ Tải ngay lập tức 100% không dính cache!
+
+#### 🎯 Cách 2: Deploy In-Place với Cache-Control Header
+- Upload đè trực tiếp lên folder Production với cờ:
+  ```powershell
+  gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.js" "index.css" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
+  ```
 
 ---
 
-#### 📋 Checklist Tổng Hợp Khi Đổi Folder
-
-| # | Việc cần làm | File |
-|---|---|---|
-| 1 | Đổi 3 URL `resource` (js, css, config) | `manifest.json` |
-| 2 | Kiểm tra `devMode` (false = production) | `manifest.json` |
-| 3 | Đổi `DOWNLOADER_URL` | `src/index.js` (dòng ~103) |
-| 4 | `npm run build` | — |
-| 5 | `gsutil cp` lên GCS folder mới | — |
-| 6 | Cập nhật Manifest Path trên Looker Studio | Looker Studio UI |
+### 5.7. 📁 Khi Nào Mới Được Phép Tạo Folder GCS Mới?
+Chỉ tạo folder mới khi:
+1. Tạo môi trường **Staging/Dev tách biệt** để phát triển các tính năng có nguy cơ gây lỗi nghiêm trọng (breaking changes), không làm ảnh hưởng đến báo cáo thật đang chạy.
+2. Được User chỉ định rõ ràng việc tạo branch/folder mới.
 
 ---
 
