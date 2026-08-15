@@ -60,7 +60,16 @@ D:\customLooker/
    - Base `.summary-row th/td` reset `font-weight: 400` để không bị double-bold từ header.
    - Nhãn dòng tổng: dùng class `.summary-label` (chữ nghiêng *italic*, màu `#64748b`).
    - Số liệu tổng: dùng class `.summary-number` (`font-weight: 600`, `font-variant-numeric: tabular-nums`).
-   - Biểu tượng: dùng class `.summary-sigma` (màu Merap Teal `#009B9E`).
+5. **Định dạng Date/Time & Number theo cột (Chuẩn BigQuery Format):**
+   - **`perColumnDateFormat` (Date/Time):** Sử dụng chuẩn BigQuery Format Elements:
+     - Ký hiệu: `%Y` (Năm 4 số), `%y` (Năm 2 số), `%m` (Tháng 01-12), `%d` (Ngày 01-31), `%H` (Giờ 00-23), `%M` (Phút 00-59), `%S` (Giây 00-59), `%B` (Tên tháng đầy đủ), `%b`/`%h` (Tên tháng viết tắt).
+     - Cú pháp: `Tên Cột:pattern` (hoặc `fieldId:pattern`). Ví dụ: `Ngày Giao:%d/%m/%Y, Created:%Y-%m-%d %H:%M:%S, Tháng:%m/%Y`.
+   - **`perColumnNumberFormat` (Number):** Sử dụng chuẩn BigQuery `FORMAT()` / `printf`:
+     - Ký hiệu: `%'.0f` hoặc `%'d` (Số nguyên có dấu phẩy ngàn), `%'.1f` (1 số lẻ), `%'.2f` (2 số lẻ), `%'.3f` (3 số lẻ).
+     - Tiền tệ: `vnd` / `vnđ` / `%'.0f ₫` (VNĐ), `usd` / `$%'.2f` (USD).
+     - Phần trăm: `%'.2f%%`, `%'.0f%%`, `percent`, `percent_2` (Tự nhân 100 nếu giá trị $\le 1$).
+     - Rút gọn: `compact` / `kmb` (`1.5M`, `2.3B`).
+     - Cú pháp: `Doanh Thu:%'.2f, Số Lượng:%'d, Tỷ Lệ:%'.2f%%, VNĐ:vnd`.
 
 ---
 
@@ -151,14 +160,29 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-re
     "metrics": [
       { "id": "qt_met1", "name": "Số Lượng", "type": "NUMBER", "aggregation": "SUM" },
       { "id": "qt_met2", "name": "Đơn Giá TB", "type": "NUMBER", "aggregation": "AVG" },
-      { "id": "qt_met3", "name": "Doanh Số Nhỏ Nhất", "type": "NUMBER", "aggregation": "MIN" }
+      { "id": "qt_met3", "name": "Doanh Số", "type": "NUMBER", "aggregation": "SUM" }
     ],
     "searchFields": [
+      { "id": "qt_dim_tenkh", "name": "tenkhachhang", "type": "TEXT" }
+    ],
+    "sort1Dimension": [
       { "id": "qt_dim1", "name": "Mã Khách Hàng", "type": "TEXT" }
     ]
   }
 }
 ```
+
+#### 📋 Bảng Ánh Xạ Các Slot Kéo Thả Bên Tab Setup Sang `data.fields`:
+
+| Tên Hiển Thị Bên Tab Setup | ID Slot (`index.json`) | Đường Dẫn API Looker Studio Trả Về | Mô Tả & Xử Lý Trong Code |
+| :--- | :--- | :--- | :--- |
+| **Dimension (Cột Dữ Liệu)** | `dimensions` | `data.fields.dimensions` | Mảng các cột Dimension chính hiển thị trên bảng. |
+| **Metric (Cột Chỉ Số)** | `metrics` | `data.fields.metrics` | Mảng các cột Metric chính, kèm metadata `aggregation` (`SUM`, `AVG`...). |
+| **🔍 Search Dimension** | `searchFields` | `data.fields.searchFields` | Danh sách cột dùng để lọc tìm kiếm. Nếu mảng này rỗng `[]` $\rightarrow$ ẩn thanh Search. |
+| **Sort 1/2/3 Dimension & Metric** | `sort1Dimension` / `sort1Metric`... | `data.fields.sort1Dimension`... | Các trường sắp xếp đa cấp 1, 2, 3 từ Setup. |
+| **Rule Format 1/2/3 Dimension & Metric** | `rule1Dimension` / `rule1Metric`... | `data.fields.rule1Dimension`... | Các trường dùng để áp dụng quy tắc tô màu có điều kiện. |
+| **🎨 Tô Màu Cột Nhóm 1/2/3** | `colGroup1Dimensions` / `colGroup1Metrics`... | `data.fields.colGroup1Dimensions`... | Các trường được gán vào 3 nhóm màu Header & Cột. |
+| **📌 Ghim Cố Định Cột** | `freezeDimensions` | `data.fields.freezeDimensions` | Các cột Dimension được cố định (Freeze / Sticky left). |
 
 #### 🔍 Minh Họa Cấu Trúc `data.tables.DEFAULT` Thực Tế Nhận Được:
 ```json
@@ -200,4 +224,27 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-re
 | **6. Không có Dynamic UI Trong Tab Style** | Schema `index.json` là tĩnh, không thể tự sinh ra N ô chọn cấu hình tương ứng với N cột dữ liệu người dùng kéo thả. | Định nghĩa sẵn các Slot nhóm cố định (Nhóm 1–3) hoặc dùng chuỗi `TEXTINPUT` cú pháp (`Doanh Thu:avg, Số Lượng:sum`). |
 | **7. Bị Cách Ly Iframe Hoàn Toàn (Cross-Origin Sandbox)** | Không thể đọc URL trang cha, không thể mở modal đè lên UI Looker Studio, không thể can thiệp sự kiện chuột của Bounding Box bên ngoài. | Dựng UI Modal/Popup nội bộ bên trong `#excelviz-app-root` và tối ưu render với `requestAnimationFrame`. |
 | **8. Không Truy Cập Được Dữ Liệu Gốc Chưa Group (Raw Underlying Data)** | Data gửi về đã bị tổng hợp/group theo các Dimension trong Setup. Không thể xem dữ liệu chi tiết nếu trường đó không được gán vào Setup. | Người thiết kế báo cáo bắt buộc phải kéo đầy đủ các Dimension chi tiết cần thiết vào Setup. |
+
+---
+
+### 9.3. 🛠️ Quy Trình 3 Bước Tạo Ô Kéo Thả Setup Mới (Custom Setup Slot)
+
+1. **Khai báo trong [`index.json`](file:///D:/customLooker/index.json) (mảng `"data"` $\rightarrow$ `"elements"`):**
+   ```json
+   {
+     "id": "customSlotId",
+     "label": "Tên Hiển Thị Bên Tab Setup",
+     "type": "DIMENSION", // "DIMENSION" (phân loại/chữ/ngày) hoặc "METRIC" (số liệu)
+     "options": { "min": 0, "max": 10 } // min: 0 (tùy chọn), max: số lượng trường tối đa
+   }
+   ```
+2. **Đọc & Xử lý trong [`src/index.js`](file:///D:/customLooker/src/index.js):**
+   ```javascript
+   // Đọc từ data.fields theo ID đã khai báo
+   const selectedFields = (data.fields && data.fields.customSlotId) || [];
+   // Map với cột bảng qua helper ID-first
+   const targetCols = selectedFields.map(f => findTableColumnByField(f, tableColumns)).filter(Boolean);
+   ```
+3. **Build & Deploy:** Đổi versioned JSON/JS, chạy `npm run build` và deploy lên GCS.
+
 

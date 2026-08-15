@@ -170,61 +170,174 @@ function downloadViaHelper(payload) {
     }
 }
 
-// HÀM ĐỊNH DẠNG NGÀY THÁNG ĐA DẠNG (Chuẩn hóa dd-mm-yyyy)
-function formatDateValue(val, fmtStyle = 'date') {
-    if (val === null || val === undefined || val === '') return '';
-    const str = String(val).trim();
+const MONTH_NAMES_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAY_SHORT_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// HÀM BÓC TÁCH CÁC THÀNH PHẦN NGÀY THÁNG ĐA DẠNG
+function parseDateComponents(val) {
+    if (val === null || val === undefined || val === '') return null;
+    const str = String(val).trim();
+    if (!str) return null;
+
+    let yyyy = '', mm = '01', dd = '01', hh = '00', min = '00', ss = '00';
+
+    // 1. 8 số YYYYMMDD: 20260815
     const match8 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/);
     if (match8) {
-        const yyyy = match8[1];
-        const mm = match8[2];
-        const dd = match8[3];
-        if (fmtStyle === 'date_yymmdd') return `${yyyy}-${mm}-${dd}`;
-        if (fmtStyle === 'date_mmyyyy') return `${mm}/${yyyy}`;
-        if (fmtStyle === 'date_yyyy') return `${yyyy}`;
-        if (fmtStyle === 'date_ddmmyyyy_hhmmss') return `${dd}-${mm}-${yyyy} 00:00:00`;
-        return `${dd}-${mm}-${yyyy}`;
+        yyyy = match8[1]; mm = match8[2]; dd = match8[3];
+    }
+    // 2. 14 số YYYYMMDDHHMMSS: 20260815143000
+    else if (str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/)) {
+        const m = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/);
+        yyyy = m[1]; mm = m[2]; dd = m[3]; hh = m[4]; min = m[5]; ss = m[6];
+    }
+    // 3. Chuẩn ISO / Database YYYY-MM-DD hoặc YYYY/MM/DD kèm giờ tùy chọn
+    else if (str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)) {
+        const m = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+        yyyy = m[1];
+        mm = m[2].padStart(2, '0');
+        dd = m[3].padStart(2, '0');
+        hh = (m[4] || '00').padStart(2, '0');
+        min = (m[5] || '00').padStart(2, '0');
+        ss = (m[6] || '00').padStart(2, '0');
+    }
+    // 4. Chuẩn DD-MM-YYYY hoặc DD/MM/YYYY
+    else if (str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)) {
+        const m = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+        dd = m[1].padStart(2, '0');
+        mm = m[2].padStart(2, '0');
+        yyyy = m[3];
+        hh = (m[4] || '00').padStart(2, '0');
+        min = (m[5] || '00').padStart(2, '0');
+        ss = (m[6] || '00').padStart(2, '0');
+    } else {
+        return null;
     }
 
-    const match14 = str.match(/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(\d{2})(\d{2})(\d{2})$/);
-    if (match14) {
-        const yyyy = match14[1];
-        const mm = match14[2];
-        const dd = match14[3];
-        const hh = match14[4];
-        const min = match14[5];
-        const ss = match14[6];
-        if (fmtStyle === 'date_ddmmyyyy_hhmmss') return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
-        if (fmtStyle === 'date_yymmdd') return `${yyyy}-${mm}-${dd}`;
-        return `${dd}-${mm}-${yyyy}`;
+    const mNum = Math.max(0, Math.min(11, parseInt(mm, 10) - 1));
+    const dNum = parseInt(dd, 10);
+    const yNum = parseInt(yyyy, 10);
+    const dateObj = new Date(yNum, mNum, dNum, parseInt(hh, 10), parseInt(min, 10), parseInt(ss, 10));
+    const dayOfWeek = isNaN(dateObj.getTime()) ? 0 : dateObj.getDay();
+
+    return {
+        yyyy, yy: yyyy.slice(-2),
+        mm, m: String(mNum + 1),
+        dd, d: String(dNum),
+        hh, h12: String((parseInt(hh, 10) % 12) || 12).padStart(2, '0'),
+        min, ss,
+        ampm: parseInt(hh, 10) >= 12 ? 'PM' : 'AM',
+        monthName: MONTH_NAMES_EN[mNum] || '',
+        monthShort: MONTH_SHORT_EN[mNum] || '',
+        dayName: WEEKDAY_NAMES_EN[dayOfWeek] || '',
+        dayShort: WEEKDAY_SHORT_EN[dayOfWeek] || ''
+    };
+}
+
+// HÀM ĐỊNH DẠNG NGÀY THÁNG THEO CHUẨN BIGQUERY FORMAT ELEMENTS (%Y, %m, %d, %H, %M, %S...)
+function formatDateValue(val, fmtStyle = '%d-%m-%Y') {
+    if (val === null || val === undefined || val === '') return '';
+    const comp = parseDateComponents(val);
+    if (!comp) return String(val).trim();
+
+    let pattern = String(fmtStyle || '%d-%m-%Y').trim();
+
+    // Map các alias viết tắt quen thuộc
+    if (pattern === 'date' || pattern === 'dmy' || pattern.toLowerCase() === 'dd-mm-yyyy') pattern = '%d-%m-%Y';
+    else if (pattern.toLowerCase() === 'dd/mm/yyyy') pattern = '%d/%m/%Y';
+    else if (pattern === 'date_yymmdd' || pattern === 'ymd' || pattern.toLowerCase() === 'yyyy-mm-dd') pattern = '%Y-%m-%d';
+    else if (pattern.toLowerCase() === 'yyyy/mm/dd') pattern = '%Y/%m/%d';
+    else if (pattern === 'date_mmyyyy' || pattern === 'my' || pattern.toLowerCase() === 'mm/yyyy') pattern = '%m/%Y';
+    else if (pattern === 'date_yyyy' || pattern.toLowerCase() === 'yyyy') pattern = '%Y';
+    else if (pattern === 'date_ddmmyyyy_hhmmss' || pattern === 'datetime' || pattern.toLowerCase() === 'dd-mm-yyyy hh:mm:ss') pattern = '%d-%m-%Y %H:%M:%S';
+
+    return pattern
+        .replace(/%Y/g, comp.yyyy)
+        .replace(/%y/g, comp.yy)
+        .replace(/%m/g, comp.mm)
+        .replace(/%B/g, comp.monthName)
+        .replace(/%b|%h/g, comp.monthShort)
+        .replace(/%d/g, comp.dd)
+        .replace(/%e/g, comp.d)
+        .replace(/%H/g, comp.hh)
+        .replace(/%I/g, comp.h12)
+        .replace(/%M/g, comp.min)
+        .replace(/%S/g, comp.ss)
+        .replace(/%p/g, comp.ampm)
+        .replace(/%A/g, comp.dayName)
+        .replace(/%a/g, comp.dayShort);
+}
+
+// HÀM ĐỊNH DẠNG SỐ THEO CHUẨN BIGQUERY FORMAT (%'.2f, %'d, %'.0f, vnd, usd...)
+function formatNumberValue(val, fmtPattern = '', fieldType = '') {
+    if (val === null || val === undefined || String(val).trim() === '') return '';
+    const num = parseNumericValue(val, fieldType);
+    if (isNaN(num)) return String(val).trim();
+
+    const pattern = String(fmtPattern || '').trim();
+    if (!pattern || pattern.toLowerCase() === 'auto') {
+        return num.toLocaleString('en-US', { maximumFractionDigits: 6 });
     }
 
-    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-    if (match) {
-        const yyyy = match[1];
-        const mm = match[2].padStart(2, '0');
-        const dd = match[3].padStart(2, '0');
-        const hh = (match[4] || '00').padStart(2, '0');
-        const min = (match[5] || '00').padStart(2, '0');
-        const ss = (match[6] || '00').padStart(2, '0');
+    const patLower = pattern.toLowerCase();
 
-        if (fmtStyle === 'date_ddmmyyyy_hhmmss') return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
-        if (fmtStyle === 'date_yymmdd') return `${yyyy}-${mm}-${dd}`;
-        if (fmtStyle === 'date_mmyyyy') return `${mm}/${yyyy}`;
-        if (fmtStyle === 'date_yyyy') return `${yyyy}`;
-        return `${dd}-${mm}-${yyyy}`;
+    // 1. Tiền tệ VNĐ: %'.0f ₫, vnd, vnđ, dong, đ, #,##0 ₫
+    if (patLower === 'vnd' || patLower === 'vnđ' || patLower === 'dong' || patLower === 'đ' || pattern.includes('₫') || patLower.includes('vnd')) {
+        return num.toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' ₫';
     }
 
-    const matchDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-    if (matchDMY) {
-        const dd = matchDMY[1].padStart(2, '0');
-        const mm = matchDMY[2].padStart(2, '0');
-        const yyyy = matchDMY[3];
-        return `${dd}-${mm}-${yyyy}`;
+    // 2. Tiền tệ USD: $%'.2f, usd, $, $#,##0.00
+    if (patLower === 'usd' || pattern.startsWith('$') || patLower.includes('usd')) {
+        return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    return str;
+    // 3. Phần trăm (Percent): %'.2f%%, %'.0f%%, percent, percent_2, 0.00%
+    if (pattern.endsWith('%%') || pattern.endsWith('%') || patLower.includes('percent') || patLower.includes('pct')) {
+        let decPlaces = 2;
+        const mDec = pattern.match(/\.(\d+)f/i) || pattern.match(/\.(0+)/);
+        if (mDec) {
+            decPlaces = mDec[1].startsWith('0') ? mDec[1].length : parseInt(mDec[1], 10);
+        } else if (patLower === 'percent' || patLower === 'pct') {
+            decPlaces = 1;
+        }
+
+        let pVal = num;
+        if (Math.abs(num) <= 1 && num !== 0) {
+            pVal = num * 100;
+        }
+        return pVal.toLocaleString('en-US', { minimumFractionDigits: decPlaces, maximumFractionDigits: decPlaces }) + '%';
+    }
+
+    // 4. Compact / Rút gọn K/M/B
+    if (patLower === 'compact' || patLower === 'kmb' || patLower === 'short') {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(num);
+    }
+
+    // 5. Chuẩn BigQuery Format: %'[width][.precision]f hoặc %'d
+    const excelMatch = pattern.match(/0\.(0+)/);
+    let precision = -1;
+    if (pattern.match(/%'\.?(\d+)f/i)) {
+        precision = parseInt(pattern.match(/%'\.?(\d+)f/i)[1], 10);
+    } else if (pattern.match(/%\.?(\d+)f/i)) {
+        precision = parseInt(pattern.match(/%\.?(\d+)f/i)[1], 10);
+    } else if (excelMatch) {
+        precision = excelMatch[1].length;
+    } else if (pattern.includes("%'d") || pattern.includes("%d") || pattern === 'int' || pattern === 'integer' || pattern === '#,##0' || pattern === '0') {
+        precision = 0;
+    }
+
+    if (precision >= 0) {
+        const hasThousandsSep = pattern.includes("'") || pattern.includes('#,##0') || !pattern.includes('%.');
+        if (hasThousandsSep) {
+            return num.toLocaleString('en-US', { minimumFractionDigits: precision, maximumFractionDigits: precision });
+        } else {
+            return num.toFixed(precision);
+        }
+    }
+
+    return num.toLocaleString('en-US', { maximumFractionDigits: 6 });
 }
 
 // HÀM TRÍCH XUẤT THÔNG TIN DATE RANGE NGUYÊN BẢN TỪ LOOKER STUDIO API
@@ -693,23 +806,21 @@ function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
 }
 
 // HÀM FORMAT CELL TOÀN DIỆN VÀ ESCAPE HTML AN TOÀN
-function formatTableCell(rawIdx, val, rules, fieldType = '') {
+function formatTableCell(rawIdx, val, rules, fieldType = '', datePattern = '', numberPattern = '') {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
 
     const str = String(val).trim();
-    const isDate = isDateValue(val, fieldType);
-    const isNum = !isDate && isNumericValue(val, fieldType);
-    // Dùng parseNumericValue để parse đúng cả "18,123.456" và "185.887.200"
+    const isDate = isDateValue(val, fieldType) || Boolean(datePattern);
+    const isNum = !isDate && (isNumericValue(val, fieldType) || Boolean(numberPattern));
     const num = isNum ? parseNumericValue(val, fieldType) : NaN;
 
     let formattedVal = str;
     if (isDate) {
-        formattedVal = formatDateValue(str, 'date');
+        formattedVal = formatDateValue(str, datePattern || '%d-%m-%Y');
     } else if (isNum && !isNaN(num)) {
-        // Giữ nguyên số chữ số thập phân từ data gốc, không cắt bớt (max 6)
-        formattedVal = num.toLocaleString('en-US', { maximumFractionDigits: 6 });
+        formattedVal = formatNumberValue(val, numberPattern || 'auto', fieldType);
     }
 
     const safeStr = escapeHtml(str);
@@ -1061,6 +1172,50 @@ function renderTable() {
             }
         } catch (e) { /* ignore parse errors */ }
 
+        // Parse per-column Date/Time format config (Chuẩn BigQuery): "Ngày Giao:%d/%m/%Y, Created At:%Y-%m-%d %H:%M:%S"
+        const columnDateFormatMap = {};
+        try {
+            const rawDateFmt = (styleConfig.perColumnDateFormat && styleConfig.perColumnDateFormat.value !== undefined)
+                ? String(styleConfig.perColumnDateFormat.value).trim() : '';
+            if (rawDateFmt) {
+                rawDateFmt.split(',').forEach(part => {
+                    const trimmed = part.trim();
+                    if (!trimmed) return;
+                    const lastColonIdx = trimmed.lastIndexOf(':');
+                    if (lastColonIdx !== -1) {
+                        const colKey = trimmed.substring(0, lastColonIdx).trim();
+                        const fmtVal = trimmed.substring(lastColonIdx + 1).trim();
+                        if (colKey && fmtVal) {
+                            columnDateFormatMap[colKey.toLowerCase()] = fmtVal;
+                            columnDateFormatMap[remove_accents(colKey)] = fmtVal;
+                        }
+                    }
+                });
+            }
+        } catch (e) { /* ignore parse errors */ }
+
+        // Parse per-column Number format config (Chuẩn BigQuery / Format): "Doanh Thu:%'.2f, Số Lượng:%'d, Tỷ Lệ:%'.2f%%"
+        const columnNumberFormatMap = {};
+        try {
+            const rawNumFmt = (styleConfig.perColumnNumberFormat && styleConfig.perColumnNumberFormat.value !== undefined)
+                ? String(styleConfig.perColumnNumberFormat.value).trim() : '';
+            if (rawNumFmt) {
+                rawNumFmt.split(',').forEach(part => {
+                    const trimmed = part.trim();
+                    if (!trimmed) return;
+                    const lastColonIdx = trimmed.lastIndexOf(':');
+                    if (lastColonIdx !== -1) {
+                        const colKey = trimmed.substring(0, lastColonIdx).trim();
+                        const fmtVal = trimmed.substring(lastColonIdx + 1).trim();
+                        if (colKey && fmtVal) {
+                            columnNumberFormatMap[colKey.toLowerCase()] = fmtVal;
+                            columnNumberFormatMap[remove_accents(colKey)] = fmtVal;
+                        }
+                    }
+                });
+            }
+        } catch (e) { /* ignore parse errors */ }
+
         let autoSummaryLabel = 'Tổng cộng';
         if (summaryType === 'avg') autoSummaryLabel = 'Trung bình (Avg)';
         else if (summaryType === 'min') autoSummaryLabel = 'Nhỏ nhất (Min)';
@@ -1239,25 +1394,31 @@ function renderTable() {
                         }
                         // else: SUM — giữ colSum
 
-                        // Xác định số chữ số thập phân khi hiển thị:
-                        // - COUNT: luôn 0 (số nguyên)
-                        // - AVG: tối thiểu 2 decimal (avg thường sinh số lẻ), nhưng không quá 6
-                        // - SUM/MIN/MAX: theo đúng độ chính xác của data gốc (0 nếu toàn số nguyên)
-                        let fractionDigits;
-                        if (colAggType === 'count') {
-                            fractionDigits = 0;
-                        } else if (colAggType === 'avg') {
-                            fractionDigits = Math.min(Math.max(maxDecimalPlaces, 2), 6);
+                        let formattedSummary = '';
+                        if (colNumFmt) {
+                            formattedSummary = formatNumberValue(finalVal, colNumFmt, col.type);
                         } else {
-                            fractionDigits = Math.min(maxDecimalPlaces, 6); // sum/min/max: theo data gốc
+                            // Xác định số chữ số thập phân khi hiển thị:
+                            // - COUNT: luôn 0 (số nguyên)
+                            // - AVG: tối thiểu 2 decimal (avg thường sinh số lẻ), nhưng không quá 6
+                            // - SUM/MIN/MAX: theo đúng độ chính xác của data gốc (0 nếu toàn số nguyên)
+                            let fractionDigits;
+                            if (colAggType === 'count') {
+                                fractionDigits = 0;
+                            } else if (colAggType === 'avg') {
+                                fractionDigits = Math.min(Math.max(maxDecimalPlaces, 2), 6);
+                            } else {
+                                fractionDigits = Math.min(maxDecimalPlaces, 6); // sum/min/max: theo data gốc
+                            }
+                            formattedSummary = finalVal.toLocaleString('en-US', {
+                                minimumFractionDigits: 0,      // không thêm 0 thừa cuối
+                                maximumFractionDigits: fractionDigits
+                            });
                         }
 
                         summaryValues[col.fieldId] = {
                             raw: finalVal,
-                            formatted: finalVal.toLocaleString('en-US', {
-                                minimumFractionDigits: 0,      // không thêm 0 thừa cuối
-                                maximumFractionDigits: fractionDigits
-                            }),
+                            formatted: formattedSummary,
                             isNumeric: true,
                             aggType: colAggType
                         };
@@ -1801,9 +1962,16 @@ function renderTable() {
                     const td = document.createElement('td');
                     if (col.isFrozen) td.classList.add('frozen-column');
 
+                    const colNameLower = (col.name || '').trim().toLowerCase();
+                    const colNameNoAccent = remove_accents(col.name || '');
+                    const colFieldId = (col.fieldId || '').trim().toLowerCase();
+
+                    const colDateFmt = columnDateFormatMap[colNameLower] || columnDateFormatMap[colNameNoAccent] || columnDateFormatMap[colFieldId] || '';
+                    const colNumFmt = columnNumberFormatMap[colNameLower] || columnNumberFormatMap[colNameNoAccent] || columnNumberFormatMap[colFieldId] || '';
+
                     const rawVal = row[col.rawIndex];
-                    const isDate = isDateValue(rawVal, col.type);
-                    const isNum = !isDate && isNumericValue(rawVal, col.type);
+                    const isDate = isDateValue(rawVal, col.type) || Boolean(colDateFmt);
+                    const isNum = !isDate && (isNumericValue(rawVal, col.type) || Boolean(colNumFmt));
 
                     if (isNum) td.classList.add('align-right');
                     else if (isDate) td.classList.add('align-center');
@@ -1819,7 +1987,7 @@ function renderTable() {
                         if (colStyle.italic) td.style.setProperty('font-style', 'italic', 'important');
                     }
 
-                    td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type);
+                    td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type, colDateFmt, colNumFmt);
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
