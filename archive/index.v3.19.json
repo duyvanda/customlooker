@@ -306,7 +306,7 @@
                 },
                 {
                     "id": "perColumnSummary",
-                    "label": "Phép tính từng Metric — VD: m1:sum,m2:avg,m3:min (m1=metric đầu tiên)",
+                    "label": "Phép tính từng Metric (m1:sum, m2:avg, m3:min...)",
                     "type": "TEXTINPUT",
                     "defaultValue": ""
                 },

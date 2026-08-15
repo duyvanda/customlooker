@@ -10,7 +10,8 @@ const runtimeState = {
     currentPage: 1,
     pageSizeOverride: null,   // number | null (null: dùng default từ Style)
     hiddenColumns: new Set(), // Set chứa fieldId hoặc tên cột bị ẩn tạm thời trong runtime
-    searchText: ''            // Từ khóa tìm kiếm tạm thời do viewer nhập
+    searchText: '',           // Từ khóa tìm kiếm tạm thời do viewer nhập
+    columnWidths: {}          // { [fieldIdOrName: string]: number } (Độ rộng cột khi kéo giãn trực tiếp)
 };
 
 let searchInitialized = false;
@@ -96,7 +97,45 @@ function isNumericValue(val, fieldType = '') {
     if (typeof val === 'number') return !isNaN(val);
     if (typeof val !== 'string') return false;
 
-    return /^-?\d+(\.\d+)?$/.test(s);
+    return !isNaN(parseNumericValue(val, fieldType));
+}
+
+// HÀM PARSE SỐ THỰC CHUẨN XÁC TỪ MỌI ĐỊNH DẠNG (PURE NUMBER, COMMA/DOT THOUSAND SEPARATORS)
+function parseNumericValue(val, fieldType = '') {
+    if (val === null || val === undefined || typeof val === 'boolean') return NaN;
+    if (typeof val === 'number') return isNaN(val) ? NaN : val;
+
+    const ft = String(fieldType || '').toUpperCase();
+    if (ft && (ft.includes('DATE') || ft.includes('YEAR') || ft.includes('TIME') || ft.includes('MONTH') || ft.includes('DAY') || ft === 'TEXT' || ft === 'STRING')) {
+        return NaN;
+    }
+
+    let str = String(val).trim();
+    if (!str) return NaN;
+    if (/^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(str)) return NaN;
+
+    if (str.includes(',') && str.includes('.')) {
+        if (str.lastIndexOf('.') > str.lastIndexOf(',')) {
+            str = str.replace(/,/g, '');
+        } else {
+            str = str.replace(/\./g, '').replace(/,/g, '.');
+        }
+    } else if (str.includes(',')) {
+        const parts = str.split(',');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+            str = str.replace(/,/g, '');
+        } else {
+            str = str.replace(/,/g, '.');
+        }
+    } else if (str.includes('.')) {
+        const parts = str.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3 && !parts[0].includes('-'))) {
+            str = str.replace(/\./g, '');
+        }
+    }
+
+    const num = Number(str);
+    return isNaN(num) ? NaN : num;
 }
 
 // COLLATOR TIẾNG VIỆT — Khởi tạo 1 lần duy nhất, tái sử dụng trong toàn bộ vòng sort
@@ -213,10 +252,10 @@ function compareValues(a, b, fieldType = '') {
         return strA.localeCompare(strB);
     }
 
-    const isNumA = isNumericValue(a, fieldType);
-    const isNumB = isNumericValue(b, fieldType);
-    if (isNumA && isNumB) {
-        return Number(a) - Number(b);
+    const numA = parseNumericValue(a, fieldType);
+    const numB = parseNumericValue(b, fieldType);
+    if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
     }
 
     return VI_COLLATOR.compare(strA, strB);
@@ -296,7 +335,8 @@ function extractTableColumns(data) {
                     fieldId: f.id || `dim_${actualIdx}`,
                     name: f.name || f.id || `Cột ${cols.length + 1}`,
                     type: (allHeaders[actualIdx] && allHeaders[actualIdx].type) || f.type || '',
-                    rawIndex: actualIdx
+                    rawIndex: actualIdx,
+                    isMetric: false
                 });
             }
         });
@@ -310,25 +350,41 @@ function extractTableColumns(data) {
             const rawIdx = findRawIndexForField(f, allHeaders);
             const actualIdx = rawIdx !== -1 ? rawIdx : (metricStartIndex + fIdx);
             if (!cols.some(c => c.rawIndex === actualIdx)) {
+                // Đọc aggregation từ Looker Studio field definition (SUM, AVG, MIN, MAX, COUNT, AUTO, etc.)
+                const rawAgg = (f.aggregation || '').toUpperCase().trim();
+                // Map Looker Studio aggregation về internal summaryType
+                let fieldSummaryType = null;
+                if (rawAgg === 'SUM') fieldSummaryType = 'sum';
+                else if (rawAgg === 'AVG' || rawAgg === 'AVERAGE') fieldSummaryType = 'avg';
+                else if (rawAgg === 'MIN') fieldSummaryType = 'min';
+                else if (rawAgg === 'MAX') fieldSummaryType = 'max';
+                else if (rawAgg === 'COUNT' || rawAgg === 'COUNT_DISTINCT') fieldSummaryType = 'count';
+                // AUTO hoặc không rõ → null → fallback về global summaryType khi tính
+
                 cols.push({
                     fieldId: f.id || `met_${actualIdx}`,
                     name: f.name || f.id || `Cột ${cols.length + 1}`,
                     type: (allHeaders[actualIdx] && allHeaders[actualIdx].type) || f.type || '',
-                    rawIndex: actualIdx
+                    rawIndex: actualIdx,
+                    isMetric: true,
+                    fieldSummaryType // null nếu AUTO/unknown, hoặc 'sum'/'avg'/'min'/'max'/'count'
                 });
             }
         });
     }
 
+
     // 3. Fallback allHeaders nếu chưa chọn dimensions/metrics
     if (cols.length === 0 && allHeaders.length > 0) {
         allHeaders.forEach((h, idx) => {
             if (!h) return;
+            const isM = (h.type === 'NUMBER' || h.type === 'PERCENT' || h.type === 'CURRENCY' || h.type === 'METRIC');
             cols.push({
                 fieldId: h.id || `col_${idx}`,
                 name: h.name || h.id || `Cột ${idx + 1}`,
                 type: h.type || '',
-                rawIndex: idx
+                rawIndex: idx,
+                isMetric: isM
             });
         });
     }
@@ -486,6 +542,10 @@ function resolveBgColor(bgPreset, customHex) {
         return hex;
     }
     const bgMap = {
+        teal: '#E6F7F7',
+        merap_teal: '#009B9E',
+        merap_navy: '#202657',
+        merap_light: '#F0FDFA',
         yellow: '#FEF08A',
         orange: '#FED7AA',
         green: '#BBF7D0',
@@ -496,7 +556,7 @@ function resolveBgColor(bgPreset, customHex) {
         dark: '#1E293B',
         white: '#FFFFFF'
     };
-    return bgMap[bgPreset] || '#FEF08A';
+    return bgMap[bgPreset] || '#E6F7F7';
 }
 
 // HÀM RESOLVE MÀU CHỮ CHO CỘT / HEADER
@@ -507,10 +567,13 @@ function resolveTextColor(textPreset, customHex, defaultText = '#DC2626') {
         return hex;
     }
     const textMap = {
+        teal: '#009B9E',
+        merap_teal: '#009B9E',
+        merap_navy: '#202657',
         red: '#DC2626',
         black: '#0F172A',
         white: '#FFFFFF',
-        green: '#15803D',
+        green: '#009B9E',
         blue: '#0284C7',
         orange: '#C2410C'
     };
@@ -638,13 +701,15 @@ function formatTableCell(rawIdx, val, rules, fieldType = '') {
     const str = String(val).trim();
     const isDate = isDateValue(val, fieldType);
     const isNum = !isDate && isNumericValue(val, fieldType);
-    const num = isNum ? Number(val) : NaN;
+    // Dùng parseNumericValue để parse đúng cả "18,123.456" và "185.887.200"
+    const num = isNum ? parseNumericValue(val, fieldType) : NaN;
 
     let formattedVal = str;
     if (isDate) {
         formattedVal = formatDateValue(str, 'date');
-    } else if (isNum) {
-        formattedVal = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+    } else if (isNum && !isNaN(num)) {
+        // Giữ nguyên số chữ số thập phân từ data gốc, không cắt bớt (max 6)
+        formattedVal = num.toLocaleString('en-US', { maximumFractionDigits: 6 });
     }
 
     const safeStr = escapeHtml(str);
@@ -679,10 +744,12 @@ function formatTableCell(rawIdx, val, rules, fieldType = '') {
 function applyFrozenColumnOffsets(table) {
     if (!table) return;
     try {
-        const theadRow = table.querySelector('thead tr');
-        if (!theadRow) return;
-        const thList = Array.from(theadRow.children);
+        const theadRows = Array.from(table.querySelectorAll('thead tr'));
+        if (theadRows.length === 0) return;
+        const thList = Array.from(theadRows[0].children);
         const tbodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        const tfootRows = Array.from(table.querySelectorAll('tfoot tr'));
+        const allDataRows = [...theadRows.slice(1), ...tbodyRows, ...tfootRows];
 
         let leftOffset = 0;
         let lastFrozenColIdx = -1;
@@ -692,7 +759,7 @@ function applyFrozenColumnOffsets(table) {
                 const width = th.getBoundingClientRect().width || th.offsetWidth;
                 th.style.left = `${leftOffset}px`;
 
-                tbodyRows.forEach(row => {
+                allDataRows.forEach(row => {
                     const td = row.children[colIdx];
                     if (td) {
                         td.style.left = `${leftOffset}px`;
@@ -703,7 +770,7 @@ function applyFrozenColumnOffsets(table) {
                 lastFrozenColIdx = colIdx;
             } else {
                 th.style.left = '';
-                tbodyRows.forEach(row => {
+                allDataRows.forEach(row => {
                     const td = row.children[colIdx];
                     if (td) td.style.left = '';
                 });
@@ -714,13 +781,13 @@ function applyFrozenColumnOffsets(table) {
         thList.forEach((th, colIdx) => {
             if (colIdx === lastFrozenColIdx) {
                 th.classList.add('frozen-column-last');
-                tbodyRows.forEach(row => {
+                allDataRows.forEach(row => {
                     const td = row.children[colIdx];
                     if (td) td.classList.add('frozen-column-last');
                 });
             } else {
                 th.classList.remove('frozen-column-last');
-                tbodyRows.forEach(row => {
+                allDataRows.forEach(row => {
                     const td = row.children[colIdx];
                     if (td) td.classList.remove('frozen-column-last');
                 });
@@ -731,14 +798,89 @@ function applyFrozenColumnOffsets(table) {
     }
 }
 
-// HÀM GẮN RESIZEOBSERVER TỰ ĐỘNG CẬP NHẬT KHI RESIZE CONTAINER
+// HÀM KHỞI TẠO TÍNH NĂNG KÉO GIÃN ĐỘ RỘNG CỘT (DRAG-TO-RESIZE)
+function setupColumnResizing(table) {
+    if (!table) return;
+    const resizers = table.querySelectorAll('.col-resizer');
+    resizers.forEach(resizer => {
+        let startX = 0;
+        let startWidth = 0;
+        let th = null;
+        let fieldId = '';
+
+        function onMouseMove(e) {
+            if (!th) return;
+            const deltaX = e.pageX - startX;
+            const newWidth = Math.max(35, Math.round(startWidth + deltaX));
+            th.style.width = `${newWidth}px`;
+            th.style.minWidth = `${newWidth}px`;
+            th.style.maxWidth = `${newWidth}px`;
+            if (fieldId) {
+                runtimeState.columnWidths[fieldId] = newWidth;
+            }
+            applyFrozenColumnOffsets(table);
+        }
+
+        function onMouseUp() {
+            if (resizer) resizer.classList.remove('resizing');
+            document.body.classList.remove('resizing-col');
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            applyFrozenColumnOffsets(table);
+        }
+
+        resizer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            th = resizer.parentElement;
+            if (!th) return;
+            fieldId = resizer.getAttribute('data-field-id') || '';
+            startX = e.pageX;
+            startWidth = th.getBoundingClientRect().width || th.offsetWidth;
+
+            resizer.classList.add('resizing');
+            document.body.classList.add('resizing-col');
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+
+        // Nhấp đúp để khôi phục độ rộng mặc định của cột
+        resizer.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            th = resizer.parentElement;
+            if (!th) return;
+            fieldId = resizer.getAttribute('data-field-id') || '';
+            th.style.width = '';
+            th.style.minWidth = '';
+            th.style.maxWidth = '';
+            if (fieldId) {
+                delete runtimeState.columnWidths[fieldId];
+            }
+            applyFrozenColumnOffsets(table);
+        });
+
+        // Chặn sự kiện click để không kích hoạt sắp xếp header
+        resizer.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+}
+
+// HÀM GẮN RESIZEOBSERVER TỰ ĐỘNG CẬP NHẬT KHI RESIZE CONTAINER (BATCHING RAF)
 function setupResizeObserver(element, callback) {
     if (typeof ResizeObserver === 'undefined') return;
     if (currentResizeObserver) {
         currentResizeObserver.disconnect();
     }
+    let rafId = null;
     currentResizeObserver = new ResizeObserver(() => {
-        callback();
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+            callback();
+        });
     });
     currentResizeObserver.observe(element);
 }
@@ -839,6 +981,11 @@ function renderTable() {
         const wasFocused = (document.activeElement === prevSearchInput);
         const cursorPosition = prevSearchInput ? prevSearchInput.selectionStart : null;
 
+        // Lưu lại vị trí cuộn ngang/dọc của bảng để tránh bị văng về cột 1 khi sort / tương tác
+        const prevScrollContainer = appRoot.querySelector('.table-scroll-container');
+        const prevScrollLeft = prevScrollContainer ? prevScrollContainer.scrollLeft : 0;
+        const prevScrollTop = prevScrollContainer ? prevScrollContainer.scrollTop : 0;
+
         // 1. TRÍCH XUẤT SCHEMA CỘT VÀ QUY TẮC
         const styleConfig = currentData.style || {};
         const fields = currentData.fields || {};
@@ -870,6 +1017,55 @@ function renderTable() {
         const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
         const fontSize = Number((styleConfig.fontSize && styleConfig.fontSize.value) || '13');
         const showSTT = styleConfig.showSTT && styleConfig.showSTT.value !== undefined ? styleConfig.showSTT.value === true : true;
+        const showSummaryRow = styleConfig.showSummaryRow && styleConfig.showSummaryRow.value !== undefined ? styleConfig.showSummaryRow.value === true : true;
+        const summaryPosition = (styleConfig.summaryPosition && styleConfig.summaryPosition.value) || 'top';
+
+        let summaryType = 'sum';
+        try {
+            const st = styleConfig.summaryType;
+            if (st) {
+                // Looker Studio SELECT_SINGLE có thể trả về: string, { value }, { stringVal }, { defaultValue }
+                const rawVal = typeof st === 'string' ? st
+                    : (st.value !== undefined && st.value !== null && String(st.value).trim() !== '' ? String(st.value).trim()
+                        : (st.stringVal !== undefined && st.stringVal !== null && String(st.stringVal).trim() !== '' ? String(st.stringVal).trim()
+                            : (st.defaultValue !== undefined ? String(st.defaultValue) : 'sum')));
+                summaryType = rawVal.toLowerCase().trim();
+            }
+        } catch (e) {
+            summaryType = 'sum';
+        }
+        if (!['sum', 'avg', 'min', 'max', 'count'].includes(summaryType)) summaryType = 'sum';
+
+        // Parse per-column summary config: "m1:sum,m2:avg,m3:min"
+        // → metricAggOverrides = { 0: 'sum', 1: 'avg', 2: 'min' } (0-based metric position)
+        const metricAggOverrides = {};
+        try {
+            const perColRaw = (styleConfig.perColumnSummary && styleConfig.perColumnSummary.value !== undefined)
+                ? String(styleConfig.perColumnSummary.value).trim() : '';
+            if (perColRaw) {
+                perColRaw.split(',').forEach(part => {
+                    // Hỗ trợ: m1:sum / M2:AVG / m 3 : min (flexible)
+                    const m = part.trim().match(/^m\s*(\d+)\s*:\s*(sum|avg|min|max|count)$/i);
+                    if (m) {
+                        const idx = parseInt(m[1], 10) - 1; // m1 → index 0
+                        if (idx >= 0) metricAggOverrides[idx] = m[2].toLowerCase();
+                    }
+                });
+            }
+        } catch (e) { /* ignore parse errors */ }
+
+        let autoSummaryLabel = 'Tổng cộng';
+        if (summaryType === 'avg') autoSummaryLabel = 'Trung bình (Avg)';
+        else if (summaryType === 'min') autoSummaryLabel = 'Nhỏ nhất (Min)';
+        else if (summaryType === 'max') autoSummaryLabel = 'Lớn nhất (Max)';
+        else if (summaryType === 'count') autoSummaryLabel = 'Số dòng (Count)';
+
+        const rawSummaryLabel = (styleConfig.summaryLabel && styleConfig.summaryLabel.value !== undefined) ? String(styleConfig.summaryLabel.value).trim() : '';
+        // Nếu user đặt label tùy chỉnh → dùng label đó; còn lại dùng auto
+        const summaryLabel = (rawSummaryLabel && rawSummaryLabel !== 'Tổng cộng' && rawSummaryLabel !== autoSummaryLabel)
+            ? rawSummaryLabel
+            : autoSummaryLabel;
+
         const textWrap = styleConfig.textWrap ? styleConfig.textWrap.value === true : false;
         const showSearch = styleConfig.showSearch ? styleConfig.showSearch.value !== false : true;
         const showColPopup = styleConfig.showColPopup ? styleConfig.showColPopup.value !== false : true;
@@ -970,6 +1166,153 @@ function renderTable() {
             });
         }
 
+        // 5.1 TÍNH TOÁN DÒNG TỔNG CỘNG (CHỈ TÍNH CHO CÁC CỘT METRICS)
+        // Thứ tự ưu tiên: perColumnSummary text (m1:sum) > field.aggregation > global summaryType
+        const summaryValues = {};
+        const colSummaryTypeMap = {};
+        if (showSummaryRow && sortedRows.length > 0) {
+            let metricPosition = 0; // đếm thứ tự metric (m1=0, m2=1, m3=2, ...)
+            visibleColumns.forEach(col => {
+                if (col.isMetric) {
+                    // Ưu tiên 1: text config "m1:sum,m2:avg" từ Style panel
+                    // Ưu tiên 2: field.aggregation từ Looker Studio metadata
+                    // Ưu tiên 3: global summaryType dropdown
+                    const colAggType = metricAggOverrides[metricPosition] || col.fieldSummaryType || summaryType;
+                    colSummaryTypeMap[col.fieldId] = colAggType;
+                    metricPosition++;
+
+                    let colSum = 0;
+                    let colMin = Infinity;
+                    let colMax = -Infinity;
+                    let validNumCount = 0;
+                    let maxDecimalPlaces = 0; // tự detect từ data thực tế của cột
+
+                    sortedRows.forEach(row => {
+                        if (!row) return;
+                        const val = row[col.rawIndex];
+                        if (val !== null && val !== undefined && val !== '') {
+                            const num = parseNumericValue(val, col.type);
+                            if (!isNaN(num)) {
+                                colSum += num;
+                                if (num < colMin) colMin = num;
+                                if (num > colMax) colMax = num;
+                                validNumCount++;
+
+                                // Detect số chữ số thập phân từ num đã parse (không parse lại string)
+                                // String(18123.456) = "18123.456" → 3 decimals ✅
+                                // String(185887200) = "185887200" → 0 decimals ✅
+                                // Tránh false-negative: "18,123.456" → num=18123.456 → String → "18123.456" → 3 ✅
+                                const numStr = String(num);
+                                const dotIdx = numStr.indexOf('.');
+                                if (dotIdx !== -1) {
+                                    const dec = numStr.length - dotIdx - 1;
+                                    if (dec > 0 && dec <= 6) maxDecimalPlaces = Math.max(maxDecimalPlaces, dec);
+                                }
+                            }
+                        }
+                    });
+
+                    if (validNumCount > 0) {
+                        let finalVal = colSum;
+                        if (colAggType === 'avg') {
+                            finalVal = colSum / validNumCount;
+                        } else if (colAggType === 'min') {
+                            finalVal = (colMin !== Infinity) ? colMin : 0;
+                        } else if (colAggType === 'max') {
+                            finalVal = (colMax !== -Infinity) ? colMax : 0;
+                        } else if (colAggType === 'count') {
+                            finalVal = validNumCount;
+                        }
+                        // else: SUM — giữ colSum
+
+                        // Xác định số chữ số thập phân khi hiển thị:
+                        // - COUNT: luôn 0 (số nguyên)
+                        // - AVG: tối thiểu 2 decimal (avg thường sinh số lẻ), nhưng không quá 6
+                        // - SUM/MIN/MAX: theo đúng độ chính xác của data gốc (0 nếu toàn số nguyên)
+                        let fractionDigits;
+                        if (colAggType === 'count') {
+                            fractionDigits = 0;
+                        } else if (colAggType === 'avg') {
+                            fractionDigits = Math.min(Math.max(maxDecimalPlaces, 2), 6);
+                        } else {
+                            fractionDigits = Math.min(maxDecimalPlaces, 6); // sum/min/max: theo data gốc
+                        }
+
+                        summaryValues[col.fieldId] = {
+                            raw: finalVal,
+                            formatted: finalVal.toLocaleString('en-US', {
+                                minimumFractionDigits: 0,      // không thêm 0 thừa cuối
+                                maximumFractionDigits: fractionDigits
+                            }),
+                            isNumeric: true,
+                            aggType: colAggType
+                        };
+                    } else {
+                        summaryValues[col.fieldId] = {
+                            raw: null,
+                            formatted: '',
+                            isNumeric: false
+                        };
+                    }
+                } else {
+                    summaryValues[col.fieldId] = {
+                        raw: null,
+                        formatted: '',
+                        isNumeric: false
+                    };
+                }
+            });
+        }
+
+
+        // HÀM TẠO DÒNG TỔNG CỘNG (DÙNG CHO THEAD HOẶC TFOOT)
+        function createSummaryRowElement(isHeader = false) {
+            const footerRow = document.createElement('tr');
+            footerRow.className = 'summary-row';
+
+            if (showSTT) {
+                const sttCell = document.createElement(isHeader ? 'th' : 'td');
+                sttCell.className = 'cell-stt frozen-column summary-cell summary-sigma';
+                sttCell.textContent = '∑';
+                sttCell.style.cursor = 'default';
+                sttCell.style.textAlign = 'center';
+                footerRow.appendChild(sttCell);
+            }
+
+            let isFirstDataCol = true;
+
+            visibleColumns.forEach((col) => {
+                const cell = document.createElement(isHeader ? 'th' : 'td');
+                cell.className = 'summary-cell';
+                if (col.isFrozen) cell.classList.add('frozen-column');
+                cell.style.cursor = 'default';
+
+                const sumData = summaryValues[col.fieldId];
+                if (sumData && sumData.isNumeric) {
+                    cell.classList.add('align-right', 'summary-number');
+                    cell.textContent = sumData.formatted;
+                } else {
+                    if (isFirstDataCol) {
+                        cell.classList.add('align-left', 'summary-label');
+                        cell.textContent = summaryLabel;
+                        isFirstDataCol = false;
+                    } else {
+                        cell.textContent = '';
+                    }
+                }
+
+                const colStyle = columnColorStyles.get(col.rawIndex);
+                if (colStyle && (colStyle.target === 'data_only' || colStyle.target === 'full_column')) {
+                    if (colStyle.bold) cell.style.setProperty('font-weight', '700', 'important');
+                }
+
+                footerRow.appendChild(cell);
+            });
+
+            return footerRow;
+        }
+
+
         // 6. PIPELINE BƯỚC 3: PAGINATION
         const defaultPageSizeFromStyle = Number((styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined) ? styleConfig.defaultPageSize.value : 20);
         const pageSize = runtimeState.pageSizeOverride !== null ? runtimeState.pageSizeOverride : defaultPageSizeFromStyle;
@@ -1051,6 +1394,38 @@ function renderTable() {
                     excelDataObjects.push(rowObj);
                 });
 
+                // Bổ sung dòng Tổng cộng vào Excel (nếu bật)
+                if (showSummaryRow && rowsToExport.length > 0) {
+                    const summaryRowExcel = [];
+                    const summaryRowObj = {};
+                    if (showSTT) {
+                        summaryRowExcel.push('∑');
+                        summaryRowObj['STT'] = '∑';
+                    }
+                    let isFirstDataCol = true;
+                    visibleColumns.forEach(c => {
+                        const sumData = summaryValues[c.fieldId];
+                        if (sumData && sumData.isNumeric) {
+                            summaryRowExcel.push(sumData.raw);
+                            summaryRowObj[c.name] = sumData.raw;
+                        } else if (isFirstDataCol) {
+                            summaryRowExcel.push(summaryLabel);
+                            summaryRowObj[c.name] = summaryLabel;
+                            isFirstDataCol = false;
+                        } else {
+                            summaryRowExcel.push('');
+                            summaryRowObj[c.name] = '';
+                        }
+                    });
+                    if (summaryPosition === 'top') {
+                        excelRows.unshift(summaryRowExcel);
+                        excelDataObjects.unshift(summaryRowObj);
+                    } else {
+                        excelRows.push(summaryRowExcel);
+                        excelDataObjects.push(summaryRowObj);
+                    }
+                }
+
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
                 const filterInfo = extractActiveFilterInfo(currentData);
@@ -1102,6 +1477,29 @@ function renderTable() {
                     });
                     csvRows.push(rowData);
                 });
+
+                // Bổ sung dòng Tổng cộng vào CSV (nếu bật)
+                if (showSummaryRow && rowsToExport.length > 0) {
+                    const summaryRowCsv = [];
+                    if (showSTT) summaryRowCsv.push('∑');
+                    let isFirstDataCol = true;
+                    visibleColumns.forEach(c => {
+                        const sumData = summaryValues[c.fieldId];
+                        if (sumData && sumData.isNumeric) {
+                            summaryRowCsv.push(sumData.raw);
+                        } else if (isFirstDataCol) {
+                            summaryRowCsv.push(summaryLabel);
+                            isFirstDataCol = false;
+                        } else {
+                            summaryRowCsv.push('');
+                        }
+                    });
+                    if (summaryPosition === 'top') {
+                        csvRows.unshift(summaryRowCsv);
+                    } else {
+                        csvRows.push(summaryRowCsv);
+                    }
+                }
 
                 const todayStr = new Date().toISOString().slice(0, 10);
                 const csvFileName = `Bao_cao_rawdata_${todayStr}.csv`;
@@ -1272,13 +1670,31 @@ function renderTable() {
             const sttTh = document.createElement('th');
             sttTh.className = 'cell-stt frozen-column';
             sttTh.style.cursor = 'default';
-            sttTh.innerText = 'STT';
+            const sttCustomWidth = runtimeState.columnWidths['__stt__'];
+            if (sttCustomWidth) {
+                sttTh.style.width = `${sttCustomWidth}px`;
+                sttTh.style.minWidth = `${sttCustomWidth}px`;
+                sttTh.style.maxWidth = `${sttCustomWidth}px`;
+            }
+            sttTh.innerHTML = `
+                <div class="th-content" style="justify-content: center; text-align: center;">
+                    <span>STT</span>
+                </div>
+                <div class="col-resizer" data-field-id="__stt__" title="Kéo để đổi độ rộng (Nhấp đúp để đặt lại)"></div>
+            `;
             headerRow.appendChild(sttTh);
         }
 
         visibleColumns.forEach((col) => {
             const th = document.createElement('th');
             if (col.isFrozen) th.classList.add('frozen-column');
+
+            const customWidth = runtimeState.columnWidths[col.fieldId] || runtimeState.columnWidths[col.name];
+            if (customWidth) {
+                th.style.width = `${customWidth}px`;
+                th.style.minWidth = `${customWidth}px`;
+                th.style.maxWidth = `${customWidth}px`;
+            }
 
             const colStyle = columnColorStyles.get(col.rawIndex);
             if (colStyle && (colStyle.target === 'header_only' || colStyle.target === 'full_column')) {
@@ -1320,18 +1736,19 @@ function renderTable() {
                     <span>${escapeHtml(col.name)}</span>
                     ${sortHtml}
                 </div>
+                <div class="col-resizer" data-field-id="${escapeHtml(col.fieldId)}" title="Kéo để đổi độ rộng (Nhấp đúp để đặt lại)"></div>
             `;
 
             if (allowHeaderSort) {
-                // 3-State Sorting: Click 1: ASC -> Click 2: DESC -> Click 3: Revert to Setup Multi-Level Sort
-                th.addEventListener('click', () => {
+                // 2-State Sorting: Click same column toggles asc ↔ desc. Click different column → asc.
+                // (Removed null/reset state to prevent sort indicator jumping to Setup default column)
+                th.addEventListener('click', (e) => {
+                    if (e.target && e.target.classList && e.target.classList.contains('col-resizer')) return;
                     if (runtimeState.sortOverride && runtimeState.sortOverride.fieldId === col.fieldId) {
-                        if (runtimeState.sortOverride.direction === 'asc') {
-                            runtimeState.sortOverride.direction = 'desc';
-                        } else {
-                            runtimeState.sortOverride = null;
-                        }
+                        // Same column: toggle asc ↔ desc
+                        runtimeState.sortOverride.direction = runtimeState.sortOverride.direction === 'asc' ? 'desc' : 'asc';
                     } else {
+                        // Different column: start with asc
                         runtimeState.sortOverride = { fieldId: col.fieldId, direction: 'asc' };
                     }
                     runtimeState.currentPage = 1;
@@ -1344,6 +1761,12 @@ function renderTable() {
             headerRow.appendChild(th);
         });
         thead.appendChild(headerRow);
+
+        // NẾU SUMMARY ROW Ở ĐẦU BẢNG (TOP): ĐẶT NGAY TRONG THEAD DƯỚI HEADER ROW
+        if (showSummaryRow && sortedRows.length > 0 && summaryPosition === 'top') {
+            thead.appendChild(createSummaryRowElement(true));
+        }
+
         table.appendChild(thead);
 
         // TBODY
@@ -1400,6 +1823,14 @@ function renderTable() {
             tbody.appendChild(tr);
         }
         table.appendChild(tbody);
+
+        // TFOOT: DÒNG TỔNG CỘNG Ở CHÂN BẢNG (KHI CHỌN BOTTOM)
+        if (showSummaryRow && sortedRows.length > 0 && summaryPosition === 'bottom') {
+            const tfoot = document.createElement('tfoot');
+            tfoot.appendChild(createSummaryRowElement(false));
+            table.appendChild(tfoot);
+        }
+
         scrollContainer.appendChild(table);
         wrapper.appendChild(scrollContainer);
 
@@ -1411,7 +1842,7 @@ function renderTable() {
         pageInfo.className = 'pagination-info';
         if (totalRows > 0) {
             const sizeLabel = pageSize === -1 ? 'Tất cả' : `${pageSize} dòng/trang`;
-            pageInfo.textContent = `Hiển thị ${startIdx + 1} - ${endIdx} trên ${totalRows.toLocaleString('vi-VN')} dòng (${sizeLabel})`;
+            pageInfo.textContent = `Hiển thị ${startIdx + 1} - ${endIdx} trên ${totalRows.toLocaleString('en-US')} dòng (${sizeLabel})`;
         } else {
             pageInfo.textContent = '0 dòng';
         }
@@ -1457,9 +1888,22 @@ function renderTable() {
 
         appRoot.appendChild(wrapper);
 
-        // TÍNH TOÁN VÀ ÁP DỤNG STICKY LEFT CHO FROZEN COLUMNS
+        // KHÔI PHỤC VỊ TRÍ CUỘN (SCROLL POSITION)
+        if (scrollContainer && (prevScrollLeft > 0 || prevScrollTop > 0)) {
+            scrollContainer.scrollLeft = prevScrollLeft;
+            scrollContainer.scrollTop = prevScrollTop;
+        }
+
+        // KHỞI TẠO TÍNH NĂNG KÉO GIÃN CỘT VÀ TÍNH TOÁN STICKY LEFT CHO FROZEN COLUMNS
+        setupColumnResizing(table);
         applyFrozenColumnOffsets(table);
-        setTimeout(() => applyFrozenColumnOffsets(table), 60);
+        setTimeout(() => {
+            applyFrozenColumnOffsets(table);
+            if (scrollContainer && (prevScrollLeft > 0 || prevScrollTop > 0)) {
+                scrollContainer.scrollLeft = prevScrollLeft;
+                scrollContainer.scrollTop = prevScrollTop;
+            }
+        }, 60);
 
         // GẮN RESIZEOBSERVER TỰ ĐỘNG CẬP NHẬT KHI RESIZE CONTAINER
         setupResizeObserver(table, () => applyFrozenColumnOffsets(table));
@@ -1479,11 +1923,15 @@ function renderTable() {
     }
 }
 
-// HÀM NHẬN DỮ LIỆU TỪ LOOKER STUDIO
+// HÀM NHẬN DỮ LIỆU TỪ LOOKER STUDIO (BATCHING VỚI RAF ĐỂ CHỐNG LAG RESIZE)
+let renderRafId = null;
 function drawVisualization(data) {
     try {
         currentData = data;
-        renderTable();
+        if (renderRafId) cancelAnimationFrame(renderRafId);
+        renderRafId = requestAnimationFrame(() => {
+            renderTable();
+        });
     } catch (err) {
         console.error('[ExcelViz] drawVisualization error:', err);
     }

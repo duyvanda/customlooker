@@ -4,7 +4,7 @@ module.exports = {
     mode: 'production',
     entry: './src/index.js',
     output: {
-        filename: 'index.bundle.v3.7.js',
+        filename: 'index.bundle.v3.20.js',
         path: path.resolve(__dirname),  // output thẳng ra root, không dùng dist/
     },
     resolve: {

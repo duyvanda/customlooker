@@ -559,60 +559,21 @@ tbody tr:hover td.frozen-column {
 .summary-row th,
 .summary-row td {
     background-color: #f1f5f9;
-    color: #1e293b;
-    font-weight: 400 !important;   /* reset về normal — từng class con sẽ override */
-    font-size: var(--app-font-size, 13px) !important;
+    color: #0f172a;
+    font-weight: 700 !important;
+    font-size: var(--app-font-size, 13px);
     line-height: 1.4;
-    padding: 6px 10px;
+    padding: 8px 10px;
     vertical-align: middle;
     box-sizing: border-box;
-    cursor: default !important;
-    pointer-events: none;
-    white-space: nowrap;
 }
 
-/* Reset các style thừa từ preview-table th không áp dụng vào summary row */
-.preview-table thead .summary-row th {
+thead .summary-row th {
     background-color: #f0fdfa !important;
-    border-top: 1px solid #b2e8e8 !important;
+    border-top: 1px solid #cbd5e1 !important;
     border-bottom: 2px solid var(--primary) !important;
-    color: #1e293b !important;
+    color: #0f172a;
     box-shadow: 0 2px 4px rgba(0, 155, 158, 0.08);
-    cursor: default !important;
-    letter-spacing: 0;
-    font-size: var(--app-font-size, 13px) !important;
-    font-weight: 400 !important;
-}
-
-/* Ngăn hover style của header th lan vào summary row */
-.preview-table thead .summary-row th:hover {
-    background-color: #f0fdfa !important;
-    color: #1e293b !important;
-}
-
-/* Ký hiệu ∑ */
-.summary-sigma {
-    font-size: calc(var(--app-font-size, 13px) + 1px) !important;
-    font-weight: 500 !important;
-    color: var(--primary, #009B9E) !important;
-    font-style: normal !important;
-}
-
-/* Nhãn "Tổng cộng" / "Trung bình" — italic, màu nhạt hơn */
-.summary-label {
-    font-style: italic !important;
-    font-weight: 500 !important;
-    color: #64748b !important;
-    letter-spacing: 0.1px;
-}
-
-/* Số liệu trong summary row — semibold, tabular nums */
-.summary-number {
-    font-weight: 600 !important;
-    font-style: normal !important;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    color: #0f172a !important;
 }
 
 .preview-table tfoot {
@@ -628,11 +589,11 @@ tbody tr:hover td.frozen-column {
 .preview-table tfoot td {
     background-color: #f1f5f9;
     color: #0f172a;
-    font-weight: 500;
+    font-weight: 700;
     border-top: 2px solid var(--primary) !important;
     border-bottom: 1px solid #cbd5e1;
-    padding: 6px 10px;
-    font-size: var(--app-font-size, 13px) !important;
+    padding: 8px 10px;
+    font-size: var(--app-font-size, 13px);
     box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.04);
 }
 
@@ -649,7 +610,7 @@ tbody tr:hover td.frozen-column {
 }
 
 .summary-cell {
-    font-size: var(--app-font-size, 13px) !important;
+    font-weight: 700 !important;
 }
 
 /* DYNAMIC BADGES & COLORS */

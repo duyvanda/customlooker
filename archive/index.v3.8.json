@@ -273,7 +273,7 @@
                     "id": "showSummaryRow",
                     "label": "Hiển thị dòng Tổng cộng (Summary Row)",
                     "type": "CHECKBOX",
-                    "defaultValue": true
+                    "defaultValue": false
                 },
                 {
                     "id": "summaryPosition",
@@ -293,22 +293,13 @@
                 },
                 {
                     "id": "summaryType",
-                    "label": "Phép tính mặc định (fallback nếu không cấu hình từng cột)",
+                    "label": "Phép tính dòng Tổng cộng cho Metric",
                     "type": "SELECT_SINGLE",
                     "defaultValue": "sum",
                     "options": [
-                        { "label": "∑ Tổng (SUM)", "value": "sum" },
-                        { "label": "📊 Trung bình (AVG)", "value": "avg" },
-                        { "label": "🔻 Nhỏ nhất (MIN)", "value": "min" },
-                        { "label": "🔺 Lớn nhất (MAX)", "value": "max" },
-                        { "label": "🔢 Đếm dòng (COUNT)", "value": "count" }
+                        { "label": "Tổng (SUM)", "value": "sum" },
+                        { "label": "Trung bình (AVG)", "value": "avg" }
                     ]
-                },
-                {
-                    "id": "perColumnSummary",
-                    "label": "Phép tính từng Metric — VD: m1:sum,m2:avg,m3:min (m1=metric đầu tiên)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
                 },
                 {
                     "id": "textWrap",
@@ -461,8 +452,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "yellow",
                     "options": [
-                        { "label": "🌿 Xanh Merap Teal (#009B9E / #E6F7F7)", "value": "teal" },
-                        { "label": "🔵 Xanh Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
                         { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
                         { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
@@ -470,7 +459,7 @@
                         { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
                         { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
                         { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
-                        { "label": "🖤 Tối / Dark (#1E293B)", "value": "dark" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
                         { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
                         { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
                     ]
@@ -487,8 +476,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "red",
                     "options": [
-                        { "label": "🌿 Chữ Merap Teal (#009B9E)", "value": "teal" },
-                        { "label": "🔵 Chữ Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
                         { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
                         { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },
@@ -557,8 +544,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "blue",
                     "options": [
-                        { "label": "🌿 Xanh Merap Teal (#009B9E / #E6F7F7)", "value": "teal" },
-                        { "label": "🔵 Xanh Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
                         { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
                         { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
@@ -566,7 +551,7 @@
                         { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
                         { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
                         { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
-                        { "label": "🖤 Tối / Dark (#1E293B)", "value": "dark" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
                         { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
                         { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
                     ]
@@ -583,8 +568,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "blue",
                     "options": [
-                        { "label": "🌿 Chữ Merap Teal (#009B9E)", "value": "teal" },
-                        { "label": "🔵 Chữ Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
                         { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
                         { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },
@@ -653,8 +636,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "green",
                     "options": [
-                        { "label": "🌿 Xanh Merap Teal (#009B9E / #E6F7F7)", "value": "teal" },
-                        { "label": "🔵 Xanh Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
                         { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
                         { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
@@ -662,7 +643,7 @@
                         { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
                         { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
                         { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
-                        { "label": "🖤 Tối / Dark (#1E293B)", "value": "dark" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
                         { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
                         { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
                     ]
@@ -679,8 +660,6 @@
                     "type": "SELECT_SINGLE",
                     "defaultValue": "green",
                     "options": [
-                        { "label": "🌿 Chữ Merap Teal (#009B9E)", "value": "teal" },
-                        { "label": "🔵 Chữ Merap Navy (#202657)", "value": "merap_navy" },
                         { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
                         { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
                         { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },

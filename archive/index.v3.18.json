@@ -293,7 +293,7 @@
                 },
                 {
                     "id": "summaryType",
-                    "label": "Phép tính mặc định (fallback nếu không cấu hình từng cột)",
+                    "label": "Phép tính dòng Tổng cộng cho Metric",
                     "type": "SELECT_SINGLE",
                     "defaultValue": "sum",
                     "options": [
@@ -303,12 +303,6 @@
                         { "label": "🔺 Lớn nhất (MAX)", "value": "max" },
                         { "label": "🔢 Đếm dòng (COUNT)", "value": "count" }
                     ]
-                },
-                {
-                    "id": "perColumnSummary",
-                    "label": "Phép tính từng Metric — VD: m1:sum,m2:avg,m3:min (m1=metric đầu tiên)",
-                    "type": "TEXTINPUT",
-                    "defaultValue": ""
                 },
                 {
                     "id": "textWrap",

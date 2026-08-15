@@ -559,11 +559,11 @@ tbody tr:hover td.frozen-column {
 .summary-row th,
 .summary-row td {
     background-color: #f1f5f9;
-    color: #1e293b;
-    font-weight: 400 !important;   /* reset về normal — từng class con sẽ override */
+    color: #0f172a;
+    font-weight: 600 !important;
     font-size: var(--app-font-size, 13px) !important;
     line-height: 1.4;
-    padding: 6px 10px;
+    padding: 7px 10px;
     vertical-align: middle;
     box-sizing: border-box;
     cursor: default !important;
@@ -576,43 +576,18 @@ tbody tr:hover td.frozen-column {
     background-color: #f0fdfa !important;
     border-top: 1px solid #b2e8e8 !important;
     border-bottom: 2px solid var(--primary) !important;
-    color: #1e293b !important;
+    color: #004d40 !important;
     box-shadow: 0 2px 4px rgba(0, 155, 158, 0.08);
     cursor: default !important;
     letter-spacing: 0;
     font-size: var(--app-font-size, 13px) !important;
-    font-weight: 400 !important;
+    font-weight: 600 !important;
 }
 
 /* Ngăn hover style của header th lan vào summary row */
 .preview-table thead .summary-row th:hover {
     background-color: #f0fdfa !important;
-    color: #1e293b !important;
-}
-
-/* Ký hiệu ∑ */
-.summary-sigma {
-    font-size: calc(var(--app-font-size, 13px) + 1px) !important;
-    font-weight: 500 !important;
-    color: var(--primary, #009B9E) !important;
-    font-style: normal !important;
-}
-
-/* Nhãn "Tổng cộng" / "Trung bình" — italic, màu nhạt hơn */
-.summary-label {
-    font-style: italic !important;
-    font-weight: 500 !important;
-    color: #64748b !important;
-    letter-spacing: 0.1px;
-}
-
-/* Số liệu trong summary row — semibold, tabular nums */
-.summary-number {
-    font-weight: 600 !important;
-    font-style: normal !important;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    color: #0f172a !important;
+    color: #004d40 !important;
 }
 
 .preview-table tfoot {
@@ -628,10 +603,10 @@ tbody tr:hover td.frozen-column {
 .preview-table tfoot td {
     background-color: #f1f5f9;
     color: #0f172a;
-    font-weight: 500;
+    font-weight: 600;
     border-top: 2px solid var(--primary) !important;
     border-bottom: 1px solid #cbd5e1;
-    padding: 6px 10px;
+    padding: 7px 10px;
     font-size: var(--app-font-size, 13px) !important;
     box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.04);
 }
@@ -650,6 +625,7 @@ tbody tr:hover td.frozen-column {
 
 .summary-cell {
     font-size: var(--app-font-size, 13px) !important;
+    font-weight: 600 !important;
 }
 
 /* DYNAMIC BADGES & COLORS */
