@@ -147,6 +147,60 @@
                         "min": 0,
                         "max": 1
                     }
+                },
+                {
+                    "id": "colGroup1Dimensions",
+                    "label": "🎨 Tô Màu Cột Nhóm 1 (Dimension)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
+                },
+                {
+                    "id": "colGroup1Metrics",
+                    "label": "🎨 Tô Màu Cột Nhóm 1 (Metric)",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
+                },
+                {
+                    "id": "colGroup2Dimensions",
+                    "label": "🎨 Tô Màu Cột Nhóm 2 (Dimension)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
+                },
+                {
+                    "id": "colGroup2Metrics",
+                    "label": "🎨 Tô Màu Cột Nhóm 2 (Metric)",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
+                },
+                {
+                    "id": "colGroup3Dimensions",
+                    "label": "🎨 Tô Màu Cột Nhóm 3 (Dimension)",
+                    "type": "DIMENSION",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
+                },
+                {
+                    "id": "colGroup3Metrics",
+                    "label": "🎨 Tô Màu Cột Nhóm 3 (Metric)",
+                    "type": "METRIC",
+                    "options": {
+                        "min": 0,
+                        "max": 20
+                    }
                 }
             ]
         }
@@ -340,6 +394,282 @@
             ]
         },
         {
+            "id": "colGroup1Section",
+            "label": "🎨 Tô Màu Cột & Header — Nhóm 1",
+            "elements": [
+                {
+                    "id": "colGroup1_enable",
+                    "label": "Bật Tô Màu Nhóm 1",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup1_target",
+                    "label": "Phạm vi áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "header_only",
+                    "options": [
+                        { "label": "🏷️ Chỉ Tiêu đề Cột (Header only)", "value": "header_only" },
+                        { "label": "📑 Cả Tiêu đề & Dữ liệu (Full Column)", "value": "full_column" },
+                        { "label": "📊 Chỉ Ô Dữ liệu (Data Cells only)", "value": "data_only" }
+                    ]
+                },
+                {
+                    "id": "colGroup1_bg",
+                    "label": "Màu Nền (Fill Background)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "yellow",
+                    "options": [
+                        { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
+                        { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
+                        { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
+                        { "label": "💙 Xanh Dương Nhạt (#BAE6FD)", "value": "blue" },
+                        { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
+                        { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
+                        { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
+                        { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup1_customBg",
+                    "label": "Mã Màu Nền Tùy Chỉnh (Hex, vd: #ffff00)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup1_textColor",
+                    "label": "Màu Chữ (Font Color)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "red",
+                    "options": [
+                        { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
+                        { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
+                        { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "🟢 Chữ Xanh Lá (#15803D)", "value": "green" },
+                        { "label": "🔵 Chữ Xanh Dương (#0284C7)", "value": "blue" },
+                        { "label": "🟠 Chữ Cam (#C2410C)", "value": "orange" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup1_customTextColor",
+                    "label": "Mã Màu Chữ Tùy Chỉnh (Hex, vd: #dc2626)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup1_bold",
+                    "label": "In Đậm Chữ (Bold)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "colGroup1_italic",
+                    "label": "In Nghiêng Chữ (Italic)",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup1_align",
+                    "label": "Căn Lề Tiêu Đề (Header Alignment)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "default",
+                    "options": [
+                        { "label": "Mặc định (Theo kiểu dữ liệu)", "value": "default" },
+                        { "label": "Căn Trái (Left)", "value": "left" },
+                        { "label": "Căn Giữa (Center)", "value": "center" },
+                        { "label": "Căn Phải (Right)", "value": "right" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "colGroup2Section",
+            "label": "🎨 Tô Màu Cột & Header — Nhóm 2",
+            "elements": [
+                {
+                    "id": "colGroup2_enable",
+                    "label": "Bật Tô Màu Nhóm 2",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup2_target",
+                    "label": "Phạm vi áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "header_only",
+                    "options": [
+                        { "label": "🏷️ Chỉ Tiêu đề Cột (Header only)", "value": "header_only" },
+                        { "label": "📑 Cả Tiêu đề & Dữ liệu (Full Column)", "value": "full_column" },
+                        { "label": "📊 Chỉ Ô Dữ liệu (Data Cells only)", "value": "data_only" }
+                    ]
+                },
+                {
+                    "id": "colGroup2_bg",
+                    "label": "Màu Nền (Fill Background)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "blue",
+                    "options": [
+                        { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
+                        { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
+                        { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
+                        { "label": "💙 Xanh Dương Nhạt (#BAE6FD)", "value": "blue" },
+                        { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
+                        { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
+                        { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
+                        { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup2_customBg",
+                    "label": "Mã Màu Nền Tùy Chỉnh (Hex, vd: #bae6fd)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup2_textColor",
+                    "label": "Màu Chữ (Font Color)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "blue",
+                    "options": [
+                        { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
+                        { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
+                        { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "🟢 Chữ Xanh Lá (#15803D)", "value": "green" },
+                        { "label": "🔵 Chữ Xanh Dương (#0284C7)", "value": "blue" },
+                        { "label": "🟠 Chữ Cam (#C2410C)", "value": "orange" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup2_customTextColor",
+                    "label": "Mã Màu Chữ Tùy Chỉnh (Hex, vd: #0284c7)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup2_bold",
+                    "label": "In Đậm Chữ (Bold)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "colGroup2_italic",
+                    "label": "In Nghiêng Chữ (Italic)",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup2_align",
+                    "label": "Căn Lề Tiêu Đề (Header Alignment)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "default",
+                    "options": [
+                        { "label": "Mặc định (Theo kiểu dữ liệu)", "value": "default" },
+                        { "label": "Căn Trái (Left)", "value": "left" },
+                        { "label": "Căn Giữa (Center)", "value": "center" },
+                        { "label": "Căn Phải (Right)", "value": "right" }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "colGroup3Section",
+            "label": "🎨 Tô Màu Cột & Header — Nhóm 3",
+            "elements": [
+                {
+                    "id": "colGroup3_enable",
+                    "label": "Bật Tô Màu Nhóm 3",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup3_target",
+                    "label": "Phạm vi áp dụng",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "header_only",
+                    "options": [
+                        { "label": "🏷️ Chỉ Tiêu đề Cột (Header only)", "value": "header_only" },
+                        { "label": "📑 Cả Tiêu đề & Dữ liệu (Full Column)", "value": "full_column" },
+                        { "label": "📊 Chỉ Ô Dữ liệu (Data Cells only)", "value": "data_only" }
+                    ]
+                },
+                {
+                    "id": "colGroup3_bg",
+                    "label": "Màu Nền (Fill Background)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "green",
+                    "options": [
+                        { "label": "💛 Vàng Excel (#FFFF00 / #FEF08A)", "value": "yellow" },
+                        { "label": "🧡 Cam Nhạt (#FED7AA)", "value": "orange" },
+                        { "label": "💚 Xanh Lá Nhạt (#BBF7D0)", "value": "green" },
+                        { "label": "💙 Xanh Dương Nhạt (#BAE6FD)", "value": "blue" },
+                        { "label": "❤️ Đỏ Nhạt (#FECACA)", "value": "red" },
+                        { "label": "💜 Tím Nhạt (#E9D5FF)", "value": "purple" },
+                        { "label": "🩶 Xám Chuẩn (#E2E8F0)", "value": "gray" },
+                        { "label": "🖤 Tối / Navy (#1E293B)", "value": "dark" },
+                        { "label": "🤍 Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup3_customBg",
+                    "label": "Mã Màu Nền Tùy Chỉnh (Hex, vd: #bbf7d0)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup3_textColor",
+                    "label": "Màu Chữ (Font Color)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "green",
+                    "options": [
+                        { "label": "🔴 Chữ Đỏ (#DC2626)", "value": "red" },
+                        { "label": "⚫ Chữ Đen (#0F172A)", "value": "black" },
+                        { "label": "⚪ Chữ Trắng (#FFFFFF)", "value": "white" },
+                        { "label": "🟢 Chữ Xanh Lá (#15803D)", "value": "green" },
+                        { "label": "🔵 Chữ Xanh Dương (#0284C7)", "value": "blue" },
+                        { "label": "🟠 Chữ Cam (#C2410C)", "value": "orange" },
+                        { "label": "✏️ Tùy Chỉnh Mã Hex (Nhập bên dưới)", "value": "custom" }
+                    ]
+                },
+                {
+                    "id": "colGroup3_customTextColor",
+                    "label": "Mã Màu Chữ Tùy Chỉnh (Hex, vd: #15803d)",
+                    "type": "TEXTINPUT",
+                    "defaultValue": ""
+                },
+                {
+                    "id": "colGroup3_bold",
+                    "label": "In Đậm Chữ (Bold)",
+                    "type": "CHECKBOX",
+                    "defaultValue": true
+                },
+                {
+                    "id": "colGroup3_italic",
+                    "label": "In Nghiêng Chữ (Italic)",
+                    "type": "CHECKBOX",
+                    "defaultValue": false
+                },
+                {
+                    "id": "colGroup3_align",
+                    "label": "Căn Lề Tiêu Đề (Header Alignment)",
+                    "type": "SELECT_SINGLE",
+                    "defaultValue": "default",
+                    "options": [
+                        { "label": "Mặc định (Theo kiểu dữ liệu)", "value": "default" },
+                        { "label": "Căn Trái (Left)", "value": "left" },
+                        { "label": "Căn Giữa (Center)", "value": "center" },
+                        { "label": "Căn Phải (Right)", "value": "right" }
+                    ]
+                }
+            ]
+        },
+        {
             "id": "rule1Section",
             "label": "🎨 Tô Màu & Badge — Quy Tắc 1",
             "elements": [
@@ -398,7 +728,11 @@
                         { "label": "🎨 Chữ Đỏ", "value": "color_red" },
                         { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
                         { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
-                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" },
+                        { "label": "🎨 Nền Vàng + Chữ Đỏ + Đậm", "value": "bg_yellow_red_bold" },
+                        { "label": "🎨 Nền Xanh Lá + Chữ Xanh Đậm", "value": "bg_green_dark" },
+                        { "label": "🎨 Nền Đỏ Nhạt + Chữ Đỏ Đậm", "value": "bg_red_dark" },
+                        { "label": "🎨 Nền Xanh Dương + Chữ Xanh Đậm", "value": "bg_blue_dark" }
                     ]
                 }
             ]
@@ -462,7 +796,11 @@
                         { "label": "🎨 Chữ Đỏ", "value": "color_red" },
                         { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
                         { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
-                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" },
+                        { "label": "🎨 Nền Vàng + Chữ Đỏ + Đậm", "value": "bg_yellow_red_bold" },
+                        { "label": "🎨 Nền Xanh Lá + Chữ Xanh Đậm", "value": "bg_green_dark" },
+                        { "label": "🎨 Nền Đỏ Nhạt + Chữ Đỏ Đậm", "value": "bg_red_dark" },
+                        { "label": "🎨 Nền Xanh Dương + Chữ Xanh Đậm", "value": "bg_blue_dark" }
                     ]
                 }
             ]
@@ -526,7 +864,11 @@
                         { "label": "🎨 Chữ Đỏ", "value": "color_red" },
                         { "label": "🎨 Chữ Vàng Cam", "value": "color_amber" },
                         { "label": "🎨 Chữ Xanh Dương", "value": "color_cyan" },
-                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" }
+                        { "label": "🎨 Dương Xanh / Âm Đỏ", "value": "color_pos_neg" },
+                        { "label": "🎨 Nền Vàng + Chữ Đỏ + Đậm", "value": "bg_yellow_red_bold" },
+                        { "label": "🎨 Nền Xanh Lá + Chữ Xanh Đậm", "value": "bg_green_dark" },
+                        { "label": "🎨 Nền Đỏ Nhạt + Chữ Đỏ Đậm", "value": "bg_red_dark" },
+                        { "label": "🎨 Nền Xanh Dương + Chữ Xanh Đậm", "value": "bg_blue_dark" }
                     ]
                 }
             ]

@@ -478,6 +478,95 @@ function extractSetupConditionalRules(data, styleConfig, tableColumns, warnings)
     return rules;
 }
 
+// HÀM RESOLVE MÀU NỀN CHO CỘT / HEADER
+function resolveBgColor(bgPreset, customHex) {
+    if (bgPreset === 'custom' && customHex && customHex.trim()) {
+        let hex = customHex.trim();
+        if (!hex.startsWith('#') && !hex.startsWith('rgb')) hex = '#' + hex;
+        return hex;
+    }
+    const bgMap = {
+        yellow: '#FEF08A',
+        orange: '#FED7AA',
+        green: '#BBF7D0',
+        blue: '#BAE6FD',
+        red: '#FECACA',
+        purple: '#E9D5FF',
+        gray: '#E2E8F0',
+        dark: '#1E293B',
+        white: '#FFFFFF'
+    };
+    return bgMap[bgPreset] || '#FEF08A';
+}
+
+// HÀM RESOLVE MÀU CHỮ CHO CỘT / HEADER
+function resolveTextColor(textPreset, customHex, defaultText = '#DC2626') {
+    if (textPreset === 'custom' && customHex && customHex.trim()) {
+        let hex = customHex.trim();
+        if (!hex.startsWith('#') && !hex.startsWith('rgb')) hex = '#' + hex;
+        return hex;
+    }
+    const textMap = {
+        red: '#DC2626',
+        black: '#0F172A',
+        white: '#FFFFFF',
+        green: '#15803D',
+        blue: '#0284C7',
+        orange: '#C2410C'
+    };
+    return textMap[textPreset] || defaultText;
+}
+
+// HÀM TRÍCH XUẤT CÁC NHÓM TÔ MÀU CỘT & HEADER TỪ SETUP VÀ STYLE
+function extractColumnColorGroups(data, styleConfig, tableColumns, warnings) {
+    if (!data) return new Map();
+    const fields = data.fields || {};
+    const columnStyles = new Map();
+
+    for (let i = 1; i <= 3; i++) {
+        const enabled = styleConfig[`colGroup${i}_enable`] && styleConfig[`colGroup${i}_enable`].value === true;
+        if (!enabled) continue;
+
+        const dims = Array.isArray(fields[`colGroup${i}Dimensions`]) ? fields[`colGroup${i}Dimensions`] : [];
+        const mets = Array.isArray(fields[`colGroup${i}Metrics`]) ? fields[`colGroup${i}Metrics`] : [];
+        const boundFields = [...dims, ...mets].filter(Boolean);
+
+        if (boundFields.length === 0) continue;
+
+        const target = (styleConfig[`colGroup${i}_target`] && styleConfig[`colGroup${i}_target`].value) || 'header_only';
+        const bgPreset = (styleConfig[`colGroup${i}_bg`] && styleConfig[`colGroup${i}_bg`].value) || (i === 1 ? 'yellow' : (i === 2 ? 'blue' : 'green'));
+        const customBg = (styleConfig[`colGroup${i}_customBg`] && styleConfig[`colGroup${i}_customBg`].value !== undefined) ? String(styleConfig[`colGroup${i}_customBg`].value) : '';
+        const textPreset = (styleConfig[`colGroup${i}_textColor`] && styleConfig[`colGroup${i}_textColor`].value) || (i === 1 ? 'red' : (i === 2 ? 'blue' : 'green'));
+        const customTextColor = (styleConfig[`colGroup${i}_customTextColor`] && styleConfig[`colGroup${i}_customTextColor`].value !== undefined) ? String(styleConfig[`colGroup${i}_customTextColor`].value) : '';
+        const bold = styleConfig[`colGroup${i}_bold`] ? styleConfig[`colGroup${i}_bold`].value !== false : true;
+        const italic = styleConfig[`colGroup${i}_italic`] ? styleConfig[`colGroup${i}_italic`].value === true : false;
+        const align = (styleConfig[`colGroup${i}_align`] && styleConfig[`colGroup${i}_align`].value) || 'default';
+
+        const bgColor = resolveBgColor(bgPreset, customBg);
+        const textColor = resolveTextColor(textPreset, customTextColor, bgPreset === 'dark' ? '#FFFFFF' : '#DC2626');
+
+        boundFields.forEach(bf => {
+            const matchedCol = findTableColumnByField(bf, tableColumns);
+            if (matchedCol && matchedCol.rawIndex >= 0) {
+                columnStyles.set(matchedCol.rawIndex, {
+                    groupIndex: i,
+                    target: target,
+                    bgColor: bgColor,
+                    textColor: textColor,
+                    bold: bold,
+                    italic: italic,
+                    align: align
+                });
+            } else if (warnings) {
+                const fname = bf.name || bf.id || `Cột nhóm ${i}`;
+                warnings.push(`Tô màu nhóm ${i}: Cột "${fname}" không nằm trong danh sách cột hiển thị của bảng.`);
+            }
+        });
+    }
+
+    return columnStyles;
+}
+
 // HÀM ĐÁNH GIÁ QUY TẮC ĐIỀU KIỆN ĐỘNG CHO MỘT Ô DỮ LIỆU
 function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
     if (!rules || rules.length === 0) return null;
@@ -577,6 +666,10 @@ function formatTableCell(rawIdx, val, rules, fieldType = '') {
                 ? `<span class="color-pos-neg-neg">${safeFormattedVal}</span>`
                 : `<span class="color-pos-neg-pos">${safeFormattedVal}</span>`;
         }
+        if (ruleStyle === 'bg_yellow_red_bold') return `<span class="cell-bg-yellow-red-bold">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'bg_green_dark') return `<span class="cell-bg-green-dark">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'bg_red_dark') return `<span class="cell-bg-red-dark">${safeFormattedVal}</span>`;
+        if (ruleStyle === 'bg_blue_dark') return `<span class="cell-bg-blue-dark">${safeFormattedVal}</span>`;
     }
 
     return safeFormattedVal;
@@ -754,6 +847,7 @@ function renderTable() {
         const searchColumns = extractSearchColumns(currentData, tableColumns, configWarnings);
         const setupSortLevels = extractSetupSortConfig(currentData, styleConfig, tableColumns, configWarnings);
         const setupConditionalRules = extractSetupConditionalRules(currentData, styleConfig, tableColumns, configWarnings);
+        const columnColorStyles = extractColumnColorGroups(currentData, styleConfig, tableColumns, configWarnings);
 
         // Trích xuất Freeze Dimensions (Chỉ áp dụng cho Dimension)
         const freezeDims = Array.isArray(fields.freezeDimensions) ? fields.freezeDimensions : [];
@@ -1166,25 +1260,42 @@ function renderTable() {
             const th = document.createElement('th');
             if (col.isFrozen) th.classList.add('frozen-column');
 
+            const colStyle = columnColorStyles.get(col.rawIndex);
+            if (colStyle && (colStyle.target === 'header_only' || colStyle.target === 'full_column')) {
+                th.style.setProperty('background-color', colStyle.bgColor, 'important');
+                th.style.setProperty('color', colStyle.textColor, 'important');
+                if (colStyle.bold) th.style.setProperty('font-weight', '700', 'important');
+                if (colStyle.italic) th.style.setProperty('font-style', 'italic', 'important');
+            }
+
             let sortHtml = '<span class="sort-icon">↕</span>';
 
             if (runtimeState.sortOverride && runtimeState.sortOverride.fieldId === col.fieldId) {
                 th.classList.add('th-sorted', 'th-sorted-override');
                 const icon = runtimeState.sortOverride.direction === 'asc' ? '▲' : '▼';
-                sortHtml = `<span class="sort-icon sort-override">${icon}</span>`;
+                const iconColorStyle = colStyle ? `color: ${colStyle.textColor} !important;` : '';
+                sortHtml = `<span class="sort-icon sort-override" style="${iconColorStyle}">${icon}</span>`;
             } else if (!runtimeState.sortOverride && setupSortLevels.length > 0) {
                 const matchedLevel = setupSortLevels.find(l => l.fieldId === col.fieldId || l.rawIndex === col.rawIndex);
                 if (matchedLevel) {
                     th.classList.add('th-sorted');
                     const icon = matchedLevel.direction === 'asc' ? '▲' : '▼';
-                    sortHtml = `<span class="sort-icon"><span class="sort-level">${matchedLevel.level}</span>${icon}</span>`;
+                    const iconColorStyle = colStyle ? `color: ${colStyle.textColor} !important;` : '';
+                    sortHtml = `<span class="sort-icon" style="${iconColorStyle}"><span class="sort-level">${matchedLevel.level}</span>${icon}</span>`;
                 }
+            }
+
+            let alignStyle = '';
+            if (colStyle && colStyle.align && colStyle.align !== 'default') {
+                if (colStyle.align === 'center') alignStyle = 'justify-content: center; text-align: center;';
+                else if (colStyle.align === 'right') alignStyle = 'justify-content: flex-end; text-align: right;';
+                else if (colStyle.align === 'left') alignStyle = 'justify-content: flex-start; text-align: left;';
             }
 
             const freezeIconHtml = col.isFrozen ? '<span class="freeze-pin">📌</span>' : '';
 
             th.innerHTML = `
-                <div class="th-content">
+                <div class="th-content" style="${alignStyle}">
                     ${freezeIconHtml}
                     <span>${escapeHtml(col.name)}</span>
                     ${sortHtml}
@@ -1242,6 +1353,14 @@ function renderTable() {
                     else td.classList.add('align-left');
 
                     if (textWrap) td.classList.add('text-wrap-cell');
+
+                    const colStyle = columnColorStyles.get(col.rawIndex);
+                    if (colStyle && (colStyle.target === 'data_only' || colStyle.target === 'full_column')) {
+                        td.style.setProperty('background-color', colStyle.bgColor, 'important');
+                        td.style.setProperty('color', colStyle.textColor, 'important');
+                        if (colStyle.bold) td.style.setProperty('font-weight', '700', 'important');
+                        if (colStyle.italic) td.style.setProperty('font-style', 'italic', 'important');
+                    }
 
                     td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type);
                     tr.appendChild(td);
