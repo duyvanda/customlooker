@@ -41,6 +41,7 @@ import {
 } from './ui.js';
 
 import {
+    DOWNLOADER_URL,
     downloadViaHelper,
     extractActiveFilterInfo
 } from './export.js';
@@ -140,9 +141,9 @@ function renderTable() {
             }
         });
 
-        const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'normal';
-        const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'striped';
-        const fontSize = Number((styleConfig.fontSize && styleConfig.fontSize.value) || '13');
+        const rowDensity = (styleConfig.rowDensity && styleConfig.rowDensity.value) || 'compact';
+        const tableVariant = (styleConfig.tableVariant && styleConfig.tableVariant.value) || 'bordered';
+        const fontSize = Number((styleConfig.fontSize && styleConfig.fontSize.value) || '16');
         const showSTT = styleConfig.showSTT && styleConfig.showSTT.value !== undefined ? styleConfig.showSTT.value === true : true;
         const showSummaryRow = styleConfig.showSummaryRow && styleConfig.showSummaryRow.value !== undefined ? styleConfig.showSummaryRow.value === true : true;
         const summaryPosition = (styleConfig.summaryPosition && styleConfig.summaryPosition.value) || 'top';
@@ -347,7 +348,7 @@ function renderTable() {
         );
 
         // 6. PIPELINE BƯỚC 3: PAGINATION
-        const defaultPageSizeFromStyle = Number((styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined) ? styleConfig.defaultPageSize.value : 20);
+        const defaultPageSizeFromStyle = Number((styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined) ? styleConfig.defaultPageSize.value : 10);
         const pageSize = runtimeState.pageSizeOverride !== null ? runtimeState.pageSizeOverride : defaultPageSizeFromStyle;
 
         const totalRows = sortedRows.length;
@@ -366,10 +367,6 @@ function renderTable() {
 
         const wrapper = document.createElement('div');
         wrapper.className = 'table-wrapper';
-        wrapper.style.setProperty('--app-font-size', `${fontSize}px`);
-        if (appRoot) {
-            appRoot.style.setProperty('--app-font-size', `${fontSize}px`);
-        }
 
         // CẢNH BÁO CẤU HÌNH KHÔNG HỢP LỆ (NẾU CÓ)
         if (configWarnings.length > 0) {
@@ -613,7 +610,7 @@ function renderTable() {
             btnExcel.addEventListener('click', () => {
                 let preWin = null;
                 try {
-                    preWin = window.open('', '_blank');
+                    preWin = window.open(DOWNLOADER_URL, '_blank');
                 } catch (e) {}
                 handleExportExcel(preWin);
             });
@@ -637,7 +634,7 @@ function renderTable() {
             btnCsv.addEventListener('click', () => {
                 let preWin = null;
                 try {
-                    preWin = window.open('', '_blank');
+                    preWin = window.open(DOWNLOADER_URL, '_blank');
                 } catch (e) {}
                 handleExportCsv(preWin);
             });

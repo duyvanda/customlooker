@@ -83,7 +83,9 @@ export function parseNumericValue(val, fieldType = '') {
         }
     } else if (str.includes('.')) {
         const parts = str.split('.');
-        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3 && !parts[0].includes('-'))) {
+        // Tách dấu âm trước khi đo độ dài phần nguyên để "-1.500" không bị xử lý sai
+        const intPart = parts[0].replace(/^-/, '');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && intPart.length <= 3)) {
             str = str.replace(/\./g, '');
         }
     }

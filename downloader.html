@@ -483,7 +483,14 @@
     window.addEventListener('message', function(event) {
         const data = event.data;
         if (!data) return;
-        if (data.type === 'EXCEL_DOWNLOAD' || data.headers || data.rows) {
+        if (data.type === 'EXCEL_DOWNLOAD' || data.type === 'CSV_DOWNLOAD' || data.headers || data.rows) {
+            try {
+                if (event.source && typeof event.source.postMessage === 'function') {
+                    event.source.postMessage({ type: 'DOWNLOADER_READY_ACK' }, '*');
+                } else if (window.opener && typeof window.opener.postMessage === 'function') {
+                    window.opener.postMessage({ type: 'DOWNLOADER_READY_ACK' }, '*');
+                }
+            } catch (e) {}
             processPayload(data);
         }
     });

@@ -11,7 +11,6 @@ import {
 // HÀM TÍNH TOÁN DÒNG TỔNG HỢP TRÊN TOÀN BỘ DỮ LIỆU ĐÃ LỌC (sortedRows)
 export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, showSummaryRow, metricAggOverridesByName, columnNumberFormatMap) {
     const summaryValues = {};
-    const colSummaryTypeMap = {};
 
     if (showSummaryRow && sortedRows.length > 0) {
         visibleColumns.forEach(col => {
@@ -30,7 +29,6 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
                     || null;
 
                 const colAggType = manualOverride || col.fieldSummaryType || summaryType;
-                colSummaryTypeMap[col.fieldId] = colAggType;
 
                 let colSum = 0;
                 let colMin = Infinity;
@@ -49,10 +47,17 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
                             if (num > colMax) colMax = num;
                             validNumCount++;
 
-                            const numStr = String(num);
-                            const dotIdx = numStr.indexOf('.');
+                            // Tính decimal places từ raw value gốc, không dùng String(num) vì JS float có thể tạo ra nhiều chữ số lẻ sai (ví dụ: 0.1+0.2=0.30000000000000004)
+                            // Nếu val là native JS number, dùng toPrecision(15) + trim zeros để tránh floating-point artifact
+                            let rawStr;
+                            if (typeof val === 'number') {
+                                rawStr = parseFloat(val.toPrecision(15)).toString();
+                            } else {
+                                rawStr = String(val).trim().replace(/,/g, '');
+                            }
+                            const dotIdx = rawStr.indexOf('.');
                             if (dotIdx !== -1) {
-                                const dec = numStr.length - dotIdx - 1;
+                                const dec = rawStr.length - dotIdx - 1;
                                 if (dec > 0 && dec <= 6) maxDecimalPlaces = Math.max(maxDecimalPlaces, dec);
                             }
                         }
@@ -112,7 +117,7 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
         });
     }
 
-    return { summaryValues, colSummaryTypeMap };
+    return { summaryValues };
 }
 
 // HÀM TẠO DÒNG TỔNG CỘNG (DÙNG CHO THEAD HOẶC TFOOT)

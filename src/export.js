@@ -60,15 +60,34 @@ export function downloadViaHelper(payload, existingWindow = null) {
 
         let attempts = 0;
         const maxAttempts = 30;
+
+        // Lắng nghe ACK từ downloader.html để dừng interval ngay khi nhận được dữ liệu
+        function onAck(event) {
+            if (event.data && event.data.type === 'DOWNLOADER_READY_ACK') {
+                clearInterval(interval);
+                window.removeEventListener('message', onAck);
+            }
+        }
+        window.addEventListener('message', onAck);
+
         const interval = setInterval(() => {
+            // Dừng ngay nếu cửa sổ đã bị đóng trước khi hết vòng lặp
+            if (helperWindow.closed) {
+                clearInterval(interval);
+                window.removeEventListener('message', onAck);
+                return;
+            }
             attempts++;
             try {
                 helperWindow.postMessage(payload, '*');
             } catch (e) {
                 console.error('[ExcelViz] postMessage error:', e);
+                clearInterval(interval);
+                window.removeEventListener('message', onAck);
             }
             if (attempts >= maxAttempts) {
                 clearInterval(interval);
+                window.removeEventListener('message', onAck);
             }
         }, 250);
     } catch (e) {

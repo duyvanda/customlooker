@@ -38,13 +38,23 @@ D:\customLooker/
 ## 3. ⚠️ Quy Tắc Bắt Buộc (Critical Rules)
 
 1. **Cố định Manifest Path:** **TUYỆT ĐỐI KHÔNG** tự ý đổi số folder GCS (ví dụ: `excelchart3` → `excelchart4`) vì sẽ làm toàn bộ báo cáo cũ của công ty bị mất liên kết và không nhận được bản cập nhật.
-2. **File Versioning (JS + CSS song song):** Khi có code mới, **BẮT BUỘC đổi tên cả JS và CSS** (ví dụ: `v3.20`) trong `webpack.config.js`, `manifest.json` và GCS. Nếu chỉ đổi JS mà giữ nguyên CSS, Google CDN sẽ trả về CSS cũ làm vỡ giao diện.
-3. **TUYỆT ĐỐI KHÔNG tự ý Deploy & Git:** Chỉ build và đóng gói bundle cục bộ; **KHÔNG ĐƯỢC TỰ Ý** chạy lệnh deploy lên GCS (`gsutil cp ...`) hoặc `git commit` / `git push` trừ khi có yêu cầu rõ ràng từ User.
-4. **Bảo toàn số 0 ở đầu:**
+2. **Quy Tắc File Versioning & Chọn Chế Độ Deploy:**
+   - **Chế độ A - Deploy NÂNG PHIÊN BẢN (Bust Cache CDN ngay lập tức - Bắt buộc song song JS + CSS):**
+     - Áp dụng khi: Có tính năng mới, thay đổi schema quan trọng, hoặc fix bug khẩn cấp cần người dùng nhận ngay bản mới 100%.
+     - **BẮT BUỘC đổi tên cả JS và CSS** (ví dụ: `v3.26` → `v3.27`) trong `webpack.config.js`, `manifest.json` và GCS để tránh lỗi Google CDN trả về CSS cũ làm vỡ giao diện.
+   - **Chế độ B - Deploy GIỮ NGUYÊN PHIÊN BẢN (Không tăng version - Google cập nhật dần):**
+     - Áp dụng khi: Chỉnh sửa nhẹ nhàng (như cập nhật cấu hình mặc định `defaultValue`, tinh chỉnh nhỏ layout), chấp nhận Google Edge CDN cập nhật dần theo thời gian mà không cần đổi tên file/URL phiên bản.
+     - Quy trình: Giữ nguyên số version hiện tại (ví dụ `v3.26`), đồng bộ file CSS/JSON tương ứng, build lại bundle ghi đè, đóng gói ZIP và deploy đè lên GCS bucket với cờ `Cache-Control`.
+   - ⚠️ **BẮT BUỘC HỎI LẠI TRƯỚC KHI DEPLOY:** Khi nhận được yêu cầu deploy từ User mà User chưa chỉ định rõ chọn Chế độ A hay B, Agent **BẮT BUỘC phải hỏi lại User** để xác nhận trước khi tiến hành deploy.
+3. **TUYỆT ĐỐI KHÔNG tự ý tăng phiên bản khi code (No auto-versioning):**
+   - Trong suốt quá trình code, refactor, fix bug hoặc test, Agent **bắt buộc giữ nguyên phiên bản hiện tại** (ví dụ `v3.26`).
+   - **TUYỆT ĐỐI KHÔNG** tự ý đổi tên output bundle trong `webpack.config.js`, không đổi `manifest.json`, không tạo file version mới (`index.vX.css`, `index.vX.json`) trừ khi có chỉ định rõ ràng từ User.
+4. **TUYỆT ĐỐI KHÔNG tự ý Deploy & Git:** Chỉ build và đóng gói bundle cục bộ; **KHÔNG ĐƯỢC TỰ Ý** chạy lệnh deploy lên GCS (`gsutil cp ...`) hoặc `git commit` / `git push` trừ khi có yêu cầu rõ ràng từ User.
+5. **Bảo toàn số 0 ở đầu:**
    - Excel: Cell type `t: 's'`, format `@` (`z: '@'`).
    - CSV: Dùng công thức `="0123"` + tiền tố BOM UTF-8 `\uFEFF`.
-5. **Nút Xuất Excel (>200k dòng):** Tự động chuyển màu đỏ cảnh báo (`btn-excel-danger`) và hướng dẫn dùng CSV để tránh crash trình duyệt.
-6. **devMode:** Luôn để `"devMode": false` trên Production để kích hoạt Google Edge CDN.
+6. **Nút Xuất Excel (>200k dòng):** Tự động chuyển màu đỏ cảnh báo (`btn-excel-danger`) và hướng dẫn dùng CSV để tránh crash trình duyệt.
+7. **devMode:** Luôn để `"devMode": false` trên Production để kích hoạt Google Edge CDN.
 
 ---
 
@@ -92,34 +102,54 @@ D:\customLooker/
 
 ---
 
-## 6. 🚀 Quy Trình Build & Deploy Khi Có Cập Nhật (Ví dụ lên `v3.26`)
+## 6. 🚀 Quy Trình Build & Deploy Khi Có Cập Nhật
 
-Chạy các lệnh sau trong PowerShell tại `D:\customLooker`:
+### 🌟 Trường Hợp 1: Deploy Giữ Nguyên Phiên Bản (Không Tăng Version)
+*Dùng cho các thay đổi nhỏ/cấu hình mặc định, chấp nhận CDN cập nhật dần:*
 
 ```powershell
-# 1. Cập nhật output.filename trong webpack.config.js -> 'index.bundle.v3.26.js'
-# 2. Tạo bản copy CSS và JSON mới
+# 1. Đồng bộ file CSS và JSON theo version hiện tại (ví dụ v3.26)
 Copy-Item 'src/index.css' 'index.v3.26.css' -Force
 Copy-Item 'index.json' 'index.v3.26.json' -Force
 
+# 2. Build Webpack ghi đè bundle hiện tại
+npm run build
+
+# 3. Đóng gói ZIP
+Remove-Item -Path "customLooker.zip" -Force -ErrorAction SilentlyContinue
+Compress-Archive -Path "src", "downloader.html", "index.v3.26.css", "index.json", "index.v3.26.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.v3.26.js", "AGENTS.md", "cai_tien.md", "changelog", "archive" -DestinationPath "customLooker.zip" -Force
+
+# 4. Deploy lên GCS Production (CHỈ KHI USER YÊU CẦU)
+gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.v3.26.js" "index.v3.26.css" "index.v3.26.json" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
+```
+
+### 🚀 Trường Hợp 2: Deploy Nâng Phiên Bản Mới (Ví dụ lên `v3.27`)
+*Dùng khi có tính năng mới/fix bug khẩn cấp cần phá cache CDN 100% lập tức:*
+
+```powershell
+# 1. Cập nhật output.filename trong webpack.config.js -> 'index.bundle.v3.27.js'
+# 2. Tạo bản copy CSS và JSON mới
+Copy-Item 'src/index.css' 'index.v3.27.css' -Force
+Copy-Item 'index.json' 'index.v3.27.json' -Force
+
 # 3. Cập nhật manifest.json:
-#    "js":     "gs://analytics_merap/excelchart3/index.bundle.v3.26.js"
-#    "css":    "gs://analytics_merap/excelchart3/index.v3.26.css"
-#    "config": "gs://analytics_merap/excelchart3/index.v3.26.json"
+#    "js":     "gs://analytics_merap/excelchart3/index.bundle.v3.27.js"
+#    "css":    "gs://analytics_merap/excelchart3/index.v3.27.css"
+#    "config": "gs://analytics_merap/excelchart3/index.v3.27.json"
 #    "devMode": false
 
 # 4. Build Webpack
 npm run build
 
 # 5. Dọn dẹp toàn bộ file version cũ và LICENSE.txt vào archive/
-Move-Item -Path "index.bundle.v3.25.js", "index.bundle.v3.25.js.LICENSE.txt", "index.v3.25.css", "index.v3.25.json" -Destination "archive/" -Force -ErrorAction SilentlyContinue
+Move-Item -Path "index.bundle.v3.26.js", "index.bundle.v3.26.js.LICENSE.txt", "index.v3.26.css", "index.v3.26.json" -Destination "archive/" -Force -ErrorAction SilentlyContinue
 
 # 6. Đóng gói ZIP
 Remove-Item -Path "customLooker.zip" -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path "src", "downloader.html", "index.v3.26.css", "index.json", "index.v3.26.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.v3.26.js", "AGENTS.md", "cai_tien.md", "changelog", "archive" -DestinationPath "customLooker.zip" -Force
+Compress-Archive -Path "src", "downloader.html", "index.v3.27.css", "index.json", "index.v3.27.json", "manifest.json", "package.json", "webpack.config.js", "index.bundle.v3.27.js", "AGENTS.md", "cai_tien.md", "changelog", "archive" -DestinationPath "customLooker.zip" -Force
 
 # 7. Deploy lên GCS Production (CHỈ KHI USER YÊU CẦU)
-gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.v3.26.js" "index.v3.26.css" "index.v3.26.json" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
+gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" -m cp -a public-read "index.bundle.v3.27.js" "index.v3.27.css" "index.v3.27.json" "downloader.html" "index.json" "manifest.json" gs://analytics_merap/excelchart3/
 ```
 
 ---

@@ -177,7 +177,7 @@ export function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
     if (!rules || rules.length === 0) return null;
 
     const isNum = isNumericValue(val, fieldType);
-    const num = isNum ? Number(val) : NaN;
+    const num = isNum ? parseNumericValue(val, fieldType) : NaN;
     const str = (val === null || val === undefined) ? '' : String(val).trim();
     const strNormalized = remove_accents(str);
 
@@ -190,8 +190,8 @@ export function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
         const targetVal = (rule.value || '').trim();
         const targetVal2 = (rule.value2 || '').trim();
         const targetNormalized = remove_accents(targetVal);
-        const targetNum = Number(targetVal);
-        const targetNum2 = Number(targetVal2);
+        const targetNum = parseNumericValue(targetVal);
+        const targetNum2 = parseNumericValue(targetVal2);
 
         const op = rule.operator;
 
