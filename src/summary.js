@@ -14,41 +14,57 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
 
     if (showSummaryRow && sortedRows.length > 0) {
         visibleColumns.forEach(col => {
-            if (col.isMetric) {
-                const colNameLower = (col.name || '').trim().toLowerCase();
-                const colNameNoAccent = remove_accents(col.name || '');
-                const colFieldId = (col.fieldId || '').trim().toLowerCase();
-                const colNumFmt = columnNumberFormatMap[colNameLower] || columnNumberFormatMap[colNameNoAccent] || columnNumberFormatMap[colFieldId] || '';
+            const colNameLower = (col.name || '').trim().toLowerCase();
+            const colNameNoAccent = remove_accents(col.name || '');
+            const colFieldId = (col.fieldId || '').trim().toLowerCase();
+            const colNumFmt = columnNumberFormatMap[colNameLower] || columnNumberFormatMap[colNameNoAccent] || columnNumberFormatMap[colFieldId] || '';
 
-                // Ưu tiên 1: Ghi đè theo tên cột / không dấu / fieldId trong perColumnSummary
-                // Ưu tiên 2: field.aggregation từ Looker Studio metadata
-                // Ưu tiên 3: global summaryType dropdown
-                const manualOverride = metricAggOverridesByName[colNameLower]
-                    || metricAggOverridesByName[colNameNoAccent]
-                    || metricAggOverridesByName[colFieldId]
-                    || null;
+            // Ưu tiên 1: Ghi đè theo tên cột / không dấu / fieldId trong perColumnSummary (áp dụng cho cả Dimension & Metric)
+            // Ưu tiên 2: field.aggregation từ Looker Studio metadata (chỉ có trên Metric)
+            // Ưu tiên 3: global summaryType dropdown (mặc định áp dụng cho Metric)
+            const manualOverride = metricAggOverridesByName[colNameLower]
+                || metricAggOverridesByName[colNameNoAccent]
+                || metricAggOverridesByName[colFieldId]
+                || null;
 
-                const colAggType = manualOverride || col.fieldSummaryType || summaryType;
+            const colAggType = col.isMetric
+                ? (manualOverride || col.fieldSummaryType || summaryType)
+                : manualOverride;
 
-                let colSum = 0;
-                let colMin = Infinity;
-                let colMax = -Infinity;
-                let validNumCount = 0;
-                let maxDecimalPlaces = 0;
+            if (!colAggType) {
+                summaryValues[col.fieldId] = {
+                    raw: null,
+                    formatted: '',
+                    isNumeric: false
+                };
+                return;
+            }
 
-                sortedRows.forEach(row => {
-                    if (!row) return;
-                    const val = row[col.rawIndex];
-                    if (val !== null && val !== undefined && val !== '') {
+            let colSum = 0;
+            let colMin = Infinity;
+            let colMax = -Infinity;
+            let validCount = 0;
+            let maxDecimalPlaces = 0;
+            const distinctSet = new Set();
+
+            sortedRows.forEach(row => {
+                if (!row) return;
+                const val = row[col.rawIndex];
+                if (val !== null && val !== undefined && String(val).trim() !== '') {
+                    if (colAggType === 'countd' || colAggType === 'count_distinct' || colAggType === 'distinct') {
+                        distinctSet.add(String(val).trim());
+                        validCount++;
+                    } else if (colAggType === 'count') {
+                        validCount++;
+                    } else {
                         const num = parseNumericValue(val, col.type);
                         if (!isNaN(num)) {
                             colSum += num;
                             if (num < colMin) colMin = num;
                             if (num > colMax) colMax = num;
-                            validNumCount++;
+                            validCount++;
 
-                            // Tính decimal places từ raw value gốc, không dùng String(num) vì JS float có thể tạo ra nhiều chữ số lẻ sai (ví dụ: 0.1+0.2=0.30000000000000004)
-                            // Nếu val là native JS number, dùng toPrecision(15) + trim zeros để tránh floating-point artifact
+                            // Tính decimal places từ raw value gốc, tránh floating-point artifact
                             let rawStr;
                             if (typeof val === 'number') {
                                 rawStr = parseFloat(val.toPrecision(15)).toString();
@@ -62,51 +78,47 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
                             }
                         }
                     }
-                });
-
-                if (validNumCount > 0) {
-                    let finalVal = colSum;
-                    if (colAggType === 'avg') {
-                        finalVal = colSum / validNumCount;
-                    } else if (colAggType === 'min') {
-                        finalVal = (colMin !== Infinity) ? colMin : 0;
-                    } else if (colAggType === 'max') {
-                        finalVal = (colMax !== -Infinity) ? colMax : 0;
-                    } else if (colAggType === 'count') {
-                        finalVal = validNumCount;
-                    }
-
-                    let formattedSummary = '';
-                    if (colNumFmt) {
-                        formattedSummary = formatNumberValue(finalVal, colNumFmt, col.type);
-                    } else {
-                        let fractionDigits;
-                        if (colAggType === 'count') {
-                            fractionDigits = 0;
-                        } else if (colAggType === 'avg') {
-                            fractionDigits = Math.min(Math.max(maxDecimalPlaces, 2), 6);
-                        } else {
-                            fractionDigits = Math.min(maxDecimalPlaces, 6);
-                        }
-                        formattedSummary = finalVal.toLocaleString('en-US', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: fractionDigits
-                        });
-                    }
-
-                    summaryValues[col.fieldId] = {
-                        raw: finalVal,
-                        formatted: formattedSummary,
-                        isNumeric: true,
-                        aggType: colAggType
-                    };
-                } else {
-                    summaryValues[col.fieldId] = {
-                        raw: null,
-                        formatted: '',
-                        isNumeric: false
-                    };
                 }
+            });
+
+            if (validCount > 0) {
+                let finalVal = colSum;
+                if (colAggType === 'avg') {
+                    finalVal = colSum / validCount;
+                } else if (colAggType === 'min') {
+                    finalVal = (colMin !== Infinity) ? colMin : 0;
+                } else if (colAggType === 'max') {
+                    finalVal = (colMax !== -Infinity) ? colMax : 0;
+                } else if (colAggType === 'count') {
+                    finalVal = validCount;
+                } else if (colAggType === 'countd' || colAggType === 'count_distinct' || colAggType === 'distinct') {
+                    finalVal = distinctSet.size;
+                }
+
+                let formattedSummary = '';
+                if (colNumFmt) {
+                    formattedSummary = formatNumberValue(finalVal, colNumFmt, col.type);
+                } else {
+                    let fractionDigits;
+                    if (colAggType === 'count' || colAggType === 'countd' || colAggType === 'count_distinct' || colAggType === 'distinct') {
+                        fractionDigits = 0;
+                    } else if (colAggType === 'avg') {
+                        fractionDigits = Math.min(Math.max(maxDecimalPlaces, 2), 6);
+                    } else {
+                        fractionDigits = Math.min(maxDecimalPlaces, 6);
+                    }
+                    formattedSummary = finalVal.toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: fractionDigits
+                    });
+                }
+
+                summaryValues[col.fieldId] = {
+                    raw: finalVal,
+                    formatted: formattedSummary,
+                    isNumeric: true,
+                    aggType: colAggType
+                };
             } else {
                 summaryValues[col.fieldId] = {
                     raw: null,
@@ -127,14 +139,15 @@ export function createSummaryRowElement(isHeader = false, showSTT, visibleColumn
 
     if (showSTT) {
         const sttCell = document.createElement(isHeader ? 'th' : 'td');
-        sttCell.className = 'cell-stt frozen-column summary-cell summary-sigma';
-        sttCell.textContent = '∑';
+        sttCell.className = 'cell-stt frozen-column summary-cell summary-label';
+        sttCell.textContent = summaryLabel;
+        sttCell.title = summaryLabel;
         sttCell.style.cursor = 'default';
         sttCell.style.textAlign = 'center';
         footerRow.appendChild(sttCell);
     }
 
-    let isFirstDataCol = true;
+    let isFirstDataCol = !showSTT;
 
     visibleColumns.forEach((col) => {
         const cell = document.createElement(isHeader ? 'th' : 'td');

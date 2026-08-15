@@ -301,12 +301,13 @@
                         { "label": "📊 Trung bình (AVG)", "value": "avg" },
                         { "label": "🔻 Nhỏ nhất (MIN)", "value": "min" },
                         { "label": "🔺 Lớn nhất (MAX)", "value": "max" },
-                        { "label": "🔢 Đếm dòng (COUNT)", "value": "count" }
+                        { "label": "🔢 Đếm dòng (COUNT)", "value": "count" },
+                        { "label": "🔠 Đếm duy nhất (COUNT DISTINCT)", "value": "countd" }
                     ]
                 },
                 {
                     "id": "perColumnSummary",
-                    "label": "Phép tính từng Metric — VD: Doanh Thu:avg, Số Lượng:sum, Đơn Giá:min",
+                    "label": "Phép tính từng Cột (Dimension & Metric) — VD: Doanh Thu:avg, Số Lượng:sum, brand:countd, Mã KH:count",
                     "type": "TEXTINPUT",
                     "defaultValue": ""
                 },

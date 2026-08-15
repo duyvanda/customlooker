@@ -161,9 +161,9 @@ function renderTable() {
         } catch (e) {
             summaryType = 'sum';
         }
-        if (!['sum', 'avg', 'min', 'max', 'count'].includes(summaryType)) summaryType = 'sum';
+        if (!['sum', 'avg', 'min', 'max', 'count', 'countd'].includes(summaryType)) summaryType = 'sum';
 
-        // Parse per-column summary config: "Doanh Thu:avg, Số Lượng:sum, don gia:min"
+        // Parse per-column summary config: "Doanh Thu:avg, Số Lượng:sum, don gia:min, brand:countd"
         const metricAggOverridesByName = {};
         try {
             const perColRaw = (styleConfig.perColumnSummary && styleConfig.perColumnSummary.value !== undefined)
@@ -176,9 +176,10 @@ function renderTable() {
                     if (lastColonIdx !== -1) {
                         const colKey = trimmed.substring(0, lastColonIdx).trim();
                         const aggVal = trimmed.substring(lastColonIdx + 1).trim().toLowerCase();
-                        if (['sum', 'avg', 'min', 'max', 'count'].includes(aggVal) && colKey) {
-                            metricAggOverridesByName[colKey.toLowerCase()] = aggVal;
-                            metricAggOverridesByName[remove_accents(colKey)] = aggVal;
+                        if (['sum', 'avg', 'min', 'max', 'count', 'countd', 'count_distinct', 'distinct'].includes(aggVal) && colKey) {
+                            const normalizedAgg = (aggVal === 'count_distinct' || aggVal === 'distinct') ? 'countd' : aggVal;
+                            metricAggOverridesByName[colKey.toLowerCase()] = normalizedAgg;
+                            metricAggOverridesByName[remove_accents(colKey)] = normalizedAgg;
                         }
                     }
                 });
@@ -234,6 +235,7 @@ function renderTable() {
         else if (summaryType === 'min') autoSummaryLabel = 'Nhỏ nhất (Min)';
         else if (summaryType === 'max') autoSummaryLabel = 'Lớn nhất (Max)';
         else if (summaryType === 'count') autoSummaryLabel = 'Số dòng (Count)';
+        else if (summaryType === 'countd') autoSummaryLabel = 'Đếm duy nhất (CountD)';
 
         const rawSummaryLabel = (styleConfig.summaryLabel && styleConfig.summaryLabel.value !== undefined) ? String(styleConfig.summaryLabel.value).trim() : '';
         const summaryLabel = (rawSummaryLabel && rawSummaryLabel !== 'Tổng cộng' && rawSummaryLabel !== autoSummaryLabel)
@@ -437,10 +439,10 @@ function renderTable() {
                     const summaryRowExcel = [];
                     const summaryRowObj = {};
                     if (showSTT) {
-                        summaryRowExcel.push('∑');
-                        summaryRowObj['STT'] = '∑';
+                        summaryRowExcel.push(summaryLabel);
+                        summaryRowObj['STT'] = summaryLabel;
                     }
-                    let isFirstDataCol = true;
+                    let isFirstDataCol = !showSTT;
                     visibleColumns.forEach(c => {
                         const sumData = summaryValues[c.fieldId];
                         if (sumData && sumData.isNumeric) {
@@ -530,8 +532,8 @@ function renderTable() {
                 // Bổ sung dòng Tổng cộng vào CSV (nếu bật)
                 if (showSummaryRow && rowsToExport.length > 0) {
                     const summaryRowCsv = [];
-                    if (showSTT) summaryRowCsv.push('∑');
-                    let isFirstDataCol = true;
+                    if (showSTT) summaryRowCsv.push(summaryLabel);
+                    let isFirstDataCol = !showSTT;
                     visibleColumns.forEach(c => {
                         const sumData = summaryValues[c.fieldId];
                         if (sumData && sumData.isNumeric) {

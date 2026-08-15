@@ -99,7 +99,8 @@ export function extractTableColumns(data) {
                 else if (rawAgg === 'AVG' || rawAgg === 'AVERAGE') fieldSummaryType = 'avg';
                 else if (rawAgg === 'MIN') fieldSummaryType = 'min';
                 else if (rawAgg === 'MAX') fieldSummaryType = 'max';
-                else if (rawAgg === 'COUNT' || rawAgg === 'COUNT_DISTINCT') fieldSummaryType = 'count';
+                else if (rawAgg === 'COUNT') fieldSummaryType = 'count';
+                else if (rawAgg === 'COUNT_DISTINCT') fieldSummaryType = 'countd';
 
                 cols.push({
                     fieldId: f.id || `met_${actualIdx}`,
