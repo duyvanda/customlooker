@@ -13,7 +13,7 @@
             "iconUrl": "https://raw.githubusercontent.com/googledatastudio/community-visualizations/master/assets/images/table.png",
             "resource": {
                 "js": "gs://analytics_merap/excelchart3/index.bundle.v3.1.js",
-                "css": "gs://analytics_merap/excelchart3/index.css",
+                "css": "gs://analytics_merap/excelchart3/index.v3.1.css",
                 "config": "gs://analytics_merap/excelchart3/index.json"
             }
         }
