@@ -7,8 +7,8 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Xuất File Excel</title>
-    <!-- SheetJS CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS CDN (Bản 0.20.3 chính thức) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -266,14 +266,29 @@
         setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
-    // Xuất CSV bảo toàn số 0 đầu bằng trick ="0123" (Excel formula → text)
+    function normalizeDownloadFileName(fileName, extension) {
+        const safeName = String(fileName || 'Bao_cao_Looker_Studio').replace(/\.(xlsx|csv)$/i, '');
+        return `${safeName}.${extension}`;
+    }
+
+    // Xuất CSV theo cơ chế chunking, bảo toàn số 0 đầu bằng trick ="0123" (Excel formula → text), chống formula injection
     function downloadCsvFile(headers, rows, fileName) {
         try {
             function escapeCsvCell(val) {
                 if (val === null || val === undefined || val === '') return '';
-                const s = String(val);
-                // Số 0 đầu (SĐT, mã định danh): dùng ="..." để Excel giữ nguyên
+                const originalIsString = typeof val === 'string';
+                let s = String(val);
+
+                // Bảo toàn số 0 đầu.
+                // Chỉ cho phép công thức dạng ="0123" khi nội dung 100% là chữ số.
                 if (/^0\d+$/.test(s.trim())) return `="${s.trim()}"`;
+
+                // Chống CSV / Formula Injection.
+                // Numeric thật (number) như -123 vẫn giữ là số.
+                if (originalIsString && /^[=+\-@\t\r]/.test(s)) {
+                    s = "'" + s;
+                }
+
                 // Chuỗi có dấu phẩy, ngoặc kép, xuống dòng → bọc ngoặc kép, escape ngoặc kép bên trong
                 if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
                     return `"${s.replace(/"/g, '""')}"`;
@@ -281,19 +296,30 @@
                 return s;
             }
 
-            const lines = [];
-            lines.push(headers.map(escapeCsvCell).join(','));
-            rows.forEach(row => {
-                lines.push(row.map(escapeCsvCell).join(','));
-            });
+            const CSV_CHUNK_ROWS = 5000;
+            const parts = ['\uFEFF'];
+            let chunkLines = [headers.map(escapeCsvCell).join(',')];
 
-            // BOM UTF-8 để Excel nhận đúng tiếng Việt
-            const csvContent = '\uFEFF' + lines.join('\r\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            for (let i = 0; i < rows.length; i++) {
+                const row = Array.isArray(rows[i]) ? rows[i] : [];
+                chunkLines.push(row.map(escapeCsvCell).join(','));
+
+                if (chunkLines.length >= CSV_CHUNK_ROWS) {
+                    parts.push(chunkLines.join('\r\n') + '\r\n');
+                    chunkLines = [];
+                }
+            }
+
+            if (chunkLines.length > 0) {
+                parts.push(chunkLines.join('\r\n'));
+            }
+
+            const blob = new Blob(parts, { type: 'text/csv;charset=utf-8;' });
+            const actualFileName = normalizeDownloadFileName(fileName, 'csv');
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = fileName.endsWith('.csv') ? fileName : (fileName + '.csv');
+            a.download = actualFileName;
             document.body.appendChild(a);
             a.click();
             setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
@@ -304,63 +330,40 @@
         }
     }
 
-    // Xuất file Excel chuẩn từ mảng 2D (Bảo toàn 100% số 0 ở đầu cho SĐT, Mã định danh, Text)
-    function downloadExcelFile(headers, rows, fileName) {
+    // Hàm tính toán độ rộng cột (Column Widths)
+    function resolveColumnWidths(headers, rows, providedWidths = null) {
+        if (Array.isArray(providedWidths) && providedWidths.length === headers.length) {
+            return providedWidths.map(w => ({ wch: Math.min(Math.max(Number(w) || 10, 10), 60) }));
+        }
+        const sampleLimit = Math.min(rows.length, 1000);
+        return headers.map((h, colIdx) => {
+            let maxLen = String(h || '').length;
+            for (let i = 0; i < sampleLimit; i++) {
+                const val = rows[i] ? rows[i][colIdx] : '';
+                if (val !== null && val !== undefined) {
+                    maxLen = Math.max(maxLen, String(val).length);
+                }
+            }
+            return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
+        });
+    }
+
+    // Xuất file Excel chuẩn từ mảng 2D sử dụng Dense Worksheet (Tiết kiệm tới 80% RAM, bảo toàn text ID và số 0 ở đầu)
+    function downloadExcelFile(headers, rows, fileName, providedWidths = null) {
         try {
-            const ws = {};
-            const range = { s: { c: 0, r: 0 }, e: { c: headers.length - 1, r: rows.length } };
+            if (typeof XLSX === 'undefined' || !XLSX.utils) {
+                throw new Error('Không tải được thư viện SheetJS.');
+            }
 
-            // Ghi dòng Tiêu đề (Headers)
-            headers.forEach((h, colIdx) => {
-                const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: 0 });
-                ws[cellRef] = { v: String(h || ''), t: 's' };
-            });
-
-            // Ghi các dòng Dữ liệu (Rows)
-            rows.forEach((row, rowIdx) => {
-                const r = rowIdx + 1;
-                row.forEach((val, colIdx) => {
-                    const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: r });
-                    if (val === null || val === undefined || val === '') {
-                        ws[cellRef] = { v: '', t: 's' };
-                    } else if (typeof val === 'number') {
-                        ws[cellRef] = { v: val, t: 'n' };
-                    } else {
-                        const sVal = String(val).trim();
-                        // Nếu là chuỗi có số 0 ở đầu (SĐT 0912..., Mã 001...) -> BẮT BUỘC giữ text 's' kèm format '@'
-                        if (/^0\d+$/.test(sVal)) {
-                            ws[cellRef] = { v: sVal, t: 's', z: '@' };
-                        } else if (/^-?\d+(\.\d+)?$/.test(sVal) && !sVal.startsWith('0')) {
-                            // Số thực thông thường
-                            ws[cellRef] = { v: Number(sVal), t: 'n' };
-                        } else {
-                            ws[cellRef] = { v: String(val), t: 's' };
-                        }
-                    }
-                });
-            });
-
-            ws['!ref'] = XLSX.utils.encode_range(range);
-
-            // Auto fit column width
-            const colWidths = headers.map((h, colIdx) => {
-                let maxLen = String(h || '').length;
-                rows.forEach(r => {
-                    const val = r[colIdx];
-                    if (val !== null && val !== undefined) {
-                        maxLen = Math.max(maxLen, String(val).length);
-                    }
-                });
-                return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
-            });
-            ws['!cols'] = colWidths;
+            const ws = XLSX.utils.aoa_to_sheet([headers], { dense: true });
+            XLSX.utils.sheet_add_aoa(ws, rows, { origin: 'A2' });
+            ws['!cols'] = resolveColumnWidths(headers, rows, providedWidths);
 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "RawData");
 
-            const actualFileName = fileName.endsWith('.xlsx') ? fileName : (fileName + '.xlsx');
-            
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const actualFileName = normalizeDownloadFileName(fileName, 'xlsx');
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
             const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -421,15 +424,16 @@
         const rows = payload.rows || [];
         const fileName = payload.fileName || 'Bao_cao_Looker_Studio';
         const filterInfo = payload.filterInfo || {};
+        const columnWidths = payload.columnWidths || null;
         const isCsv = payload.type === 'CSV_DOWNLOAD';
 
-        globalData = { headers, rows, fileName, filterInfo, isCsv };
+        globalData = { headers, rows, fileName, filterInfo, columnWidths, isCsv };
 
         let success = false;
         if (isCsv) {
             success = downloadCsvFile(headers, rows, fileName);
         } else {
-            success = downloadExcelFile(headers, rows, fileName);
+            success = downloadExcelFile(headers, rows, fileName, columnWidths);
         }
 
         const isHeavy = rows.length > 200000;
@@ -477,34 +481,70 @@
         document.getElementById('valRows').textContent = rows.length.toLocaleString('en-US');
         document.getElementById('valCols').textContent = headers.length;
         document.getElementById('valFileName').textContent = fileName;
+
+        // Dataset lớn: giải phóng raw rows sau khi file đã tạo xong.
+        // Tránh tab downloader giữ hàng trăm MB RAM vô thời hạn.
+        if (isHeavy && success) {
+            setTimeout(() => {
+                if (globalData) {
+                    globalData.rows = null;
+                    globalData.columnWidths = null;
+                }
+
+                if (btnExcelEl) {
+                    btnExcelEl.disabled = true;
+                    btnExcelEl.textContent = '✓ Đã tải Excel - xuất lại từ báo cáo';
+                }
+
+                if (btnCsvEl) {
+                    btnCsvEl.disabled = true;
+                    btnCsvEl.textContent = '✓ Đã tải - xuất lại từ báo cáo';
+                }
+            }, 0);
+        }
     }
 
-    // Lắng nghe postMessage từ Looker Studio Viz
+    // Lắng nghe postMessage từ Looker Studio Viz theo chuẩn Handshake
     window.addEventListener('message', function(event) {
         const data = event.data;
-        if (!data) return;
+        if (!data || !event.source) return;
+
+        if (window.opener && event.source !== window.opener) {
+            return;
+        }
+
+        if (data.type === 'DOWNLOADER_PING') {
+            try {
+                event.source.postMessage({ type: 'DOWNLOADER_PONG' }, '*');
+            } catch (e) {}
+            return;
+        }
+
         if (data.type === 'EXCEL_DOWNLOAD' || data.type === 'CSV_DOWNLOAD' || data.headers || data.rows) {
             try {
-                if (event.source && typeof event.source.postMessage === 'function') {
-                    event.source.postMessage({ type: 'DOWNLOADER_READY_ACK' }, '*');
-                } else if (window.opener && typeof window.opener.postMessage === 'function') {
-                    window.opener.postMessage({ type: 'DOWNLOADER_READY_ACK' }, '*');
-                }
+                event.source.postMessage({ type: 'DOWNLOADER_PAYLOAD_ACK' }, '*');
             } catch (e) {}
             processPayload(data);
         }
     });
 
+    // Bắn tín hiệu READY ngay khi tab tải mở xong để báo cho trang chính biết
+    try {
+        if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage({ type: 'DOWNLOADER_READY' }, '*');
+        }
+    } catch (e) {}
+
     // Nút Tải File Excel
     document.getElementById('btnDownloadExcel').addEventListener('click', () => {
-        if (!globalData) return;
-        downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName);
+        if (!globalData || !Array.isArray(globalData.rows)) return;
+        downloadExcelFile(globalData.headers, globalData.rows, globalData.fileName, globalData.columnWidths);
         showToast('📥 Đang tải file Excel (.xlsx)...');
     });
 
     // Nút Tải Lại CSV
     document.getElementById('btnDownloadCsv').addEventListener('click', () => {
-        if (!globalData) return;
+        if (!globalData || !Array.isArray(globalData.rows)) return;
         downloadCsvFile(globalData.headers, globalData.rows, globalData.fileName);
         showToast('📄 Đang tải file CSV...');
     });

@@ -3,6 +3,10 @@
 // ==========================================
 
 export const DOWNLOADER_URL = 'https://storage.googleapis.com/analytics_merap/excelchart3/downloader.html';
+const DOWNLOADER_ORIGIN = new URL(DOWNLOADER_URL).origin;
+
+const HANDSHAKE_INTERVAL_MS = 250;
+const HANDSHAKE_MAX_ATTEMPTS = 120;
 
 // HÀM HIỂN THỊ MODAL TRỢ GIÚP KHI BỊ CHẶN POPUP (KHÔNG CẦN F5 TRANG)
 export function showPopupBlockedFallback(payload) {
@@ -44,55 +48,123 @@ export function showPopupBlockedFallback(payload) {
     }
 }
 
-// HÀM MỞ HELPER XUẤT EXCEL (VƯỢT QUA GIỚI HẠN SANDBOX ALLOW-DOWNLOADS CỦA GOOGLE)
+// HÀM MỞ HELPER XUẤT EXCEL / CSV THEO GIAO THỨC HANDSHAKE (CHỈ GỬI PAYLOAD ĐÚNG 1 LẦN)
 export function downloadViaHelper(payload, existingWindow = null) {
-    try {
-        let helperWindow = existingWindow;
-        if (!helperWindow || helperWindow.closed) {
-            helperWindow = window.open(DOWNLOADER_URL, '_blank');
-        }
+    return new Promise((resolve) => {
+        let settled = false;
 
-        if (!helperWindow) {
-            // Không mở được tab do trình duyệt chặn -> Hiện Banner Fallback để người dùng bấm tải ngay, KHÔNG CẦN F5
-            showPopupBlockedFallback(payload);
-            return;
-        }
+        const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            resolve(Boolean(ok));
+        };
 
-        let attempts = 0;
-        const maxAttempts = 30;
-
-        // Lắng nghe ACK từ downloader.html để dừng interval ngay khi nhận được dữ liệu
-        function onAck(event) {
-            if (event.data && event.data.type === 'DOWNLOADER_READY_ACK') {
-                clearInterval(interval);
-                window.removeEventListener('message', onAck);
+        try {
+            let helperWindow = existingWindow;
+            if (!helperWindow || helperWindow.closed) {
+                helperWindow = window.open(DOWNLOADER_URL, '_blank');
             }
-        }
-        window.addEventListener('message', onAck);
 
-        const interval = setInterval(() => {
-            // Dừng ngay nếu cửa sổ đã bị đóng trước khi hết vòng lặp
-            if (helperWindow.closed) {
-                clearInterval(interval);
-                window.removeEventListener('message', onAck);
+            if (!helperWindow) {
+                showPopupBlockedFallback(payload);
+                finish(false);
                 return;
             }
-            attempts++;
-            try {
-                helperWindow.postMessage(payload, '*');
-            } catch (e) {
-                console.error('[ExcelViz] postMessage error:', e);
-                clearInterval(interval);
-                window.removeEventListener('message', onAck);
+
+            let attempts = 0;
+            let payloadSent = false;
+            let interval = null;
+            let timeout = null;
+
+            const cleanup = () => {
+                if (interval) clearInterval(interval);
+                if (timeout) clearTimeout(timeout);
+                interval = null;
+                timeout = null;
+                window.removeEventListener('message', onMessage);
+            };
+
+            const sendPayloadOnce = () => {
+                if (payloadSent || helperWindow.closed) return;
+                payloadSent = true;
+                try {
+                    helperWindow.postMessage(payload, DOWNLOADER_ORIGIN);
+                } catch (e) {
+                    console.error('[ExcelViz] postMessage payload error:', e);
+                    cleanup();
+                    finish(false);
+                }
+            };
+
+            function onMessage(event) {
+                if (event.source !== helperWindow || event.origin !== DOWNLOADER_ORIGIN) {
+                    return;
+                }
+
+                const type = event.data && event.data.type;
+                if (type === 'DOWNLOADER_READY' || type === 'DOWNLOADER_PONG') {
+                    if (interval) {
+                        clearInterval(interval);
+                        interval = null;
+                    }
+                    sendPayloadOnce();
+                    return;
+                }
+
+                if (type === 'DOWNLOADER_PAYLOAD_ACK' || type === 'DOWNLOADER_READY_ACK') {
+                    cleanup();
+                    finish(true);
+                }
             }
-            if (attempts >= maxAttempts) {
-                clearInterval(interval);
-                window.removeEventListener('message', onAck);
+
+            window.addEventListener('message', onMessage);
+
+            const pingHelper = () => {
+                if (payloadSent) return;
+                if (helperWindow.closed) {
+                    cleanup();
+                    finish(false);
+                    return;
+                }
+
+                attempts++;
+                try {
+                    helperWindow.postMessage({ type: 'DOWNLOADER_PING' }, DOWNLOADER_ORIGIN);
+                } catch (e) {
+                    console.error('[ExcelViz] downloader handshake error:', e);
+                    cleanup();
+                    finish(false);
+                    return;
+                }
+
+                if (attempts >= HANDSHAKE_MAX_ATTEMPTS) {
+                    cleanup();
+                    try {
+                        if (!helperWindow.closed) helperWindow.close();
+                    } catch (e) {}
+                    alert('Không thể kết nối tới tab tải file. Vui lòng thử lại.');
+                    finish(false);
+                }
+            };
+
+            pingHelper();
+
+            if (!settled && !payloadSent) {
+                interval = setInterval(pingHelper, HANDSHAKE_INTERVAL_MS);
             }
-        }, 250);
-    } catch (e) {
-        console.error('[ExcelViz] download error:', e);
-    }
+
+            timeout = setTimeout(() => {
+                if (payloadSent) {
+                    cleanup();
+                    finish(false);
+                }
+            }, 60000);
+
+        } catch (e) {
+            console.error('[ExcelViz] download error:', e);
+            finish(false);
+        }
+    });
 }
 
 // HÀM TRÍCH XUẤT THÔNG TIN DATE RANGE NGUYÊN BẢN TỪ LOOKER STUDIO API
@@ -103,3 +175,4 @@ export function extractActiveFilterInfo(data) {
     }
     return filterInfo;
 }
+

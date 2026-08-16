@@ -62,6 +62,38 @@ const runtimeState = {
 let searchInitialized = false;
 let lastDefaultSearchText = null;
 
+let searchDebounceTimer = null;
+let exportInProgress = false;
+
+const SEARCH_DEBOUNCE_MS = 250;
+const MAX_RENDER_ALL_ROWS = 5000;
+const SAFE_FALLBACK_PAGE_SIZE = 1000;
+const EXPORT_YIELD_EVERY_ROWS = 5000;
+const EXCEL_MAX_WORKSHEET_ROWS = 1048576;
+
+const processedRowsCache = {
+    dataRef: null,
+    key: '',
+    rows: null
+};
+
+const summaryCache = {
+    rowsRef: null,
+    key: '',
+    result: null
+};
+
+function yieldToBrowser() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function setExportButtonsBusy(isBusy) {
+    ['btn-main-excel-export', 'btn-main-csv-export'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = isBusy;
+    });
+}
+
 // HÀM TẠO VÀ LẤY APP ROOT CONTAINER
 function getAppRoot() {
     let root = document.getElementById('excelviz-app-root');
@@ -274,86 +306,150 @@ function renderTable() {
             ? currentData.tables.DEFAULT.rows
             : [];
 
-        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING
+        // 4. PIPELINE BƯỚC 1: SEARCH FILTERING & BƯỚC 2: SORTING (CÓ CACHE)
         const canSearch = searchColumns.length > 0;
         const searchMode = (styleConfig.searchMode && styleConfig.searchMode.value) || 'contains';
         const caseSensitive = styleConfig.searchCaseSensitive ? styleConfig.searchCaseSensitive.value === true : false;
 
-        let filteredRows = rawRows;
-        if (canSearch && runtimeState.searchText && runtimeState.searchText.trim() !== '') {
-            const queryRaw = runtimeState.searchText.trim();
-            const query = caseSensitive ? queryRaw : remove_accents(queryRaw);
-            const queryWords = query.split(/\s+/).filter(Boolean);
+        const processedRowsKey = JSON.stringify({
+            searchText: canSearch ? runtimeState.searchText : '',
+            searchMode,
+            caseSensitive,
+            searchColumns: searchColumns.map(c => c.rawIndex),
+            sortOverride: runtimeState.sortOverride
+                ? { fieldId: runtimeState.sortOverride.fieldId, direction: runtimeState.sortOverride.direction }
+                : null,
+            setupSortLevels: setupSortLevels.map(level => ({
+                rawIndex: level.rawIndex,
+                direction: level.direction,
+                type: level.type
+            }))
+        });
 
-            filteredRows = rawRows.filter(row => {
-                if (!row) return false;
-                return searchColumns.some(col => {
-                    const rawVal = row[col.rawIndex];
-                    if (rawVal === null || rawVal === undefined) return false;
-                    const cellStr = caseSensitive ? String(rawVal) : remove_accents(rawVal);
+        let sortedRows;
+        if (
+            processedRowsCache.dataRef === currentData &&
+            processedRowsCache.key === processedRowsKey &&
+            Array.isArray(processedRowsCache.rows)
+        ) {
+            sortedRows = processedRowsCache.rows;
+        } else {
+            let filteredRows = rawRows;
+            if (canSearch && runtimeState.searchText && runtimeState.searchText.trim() !== '') {
+                const queryRaw = runtimeState.searchText.trim();
+                const query = caseSensitive ? queryRaw : remove_accents(queryRaw);
+                const queryWords = query.split(/\s+/).filter(Boolean);
 
-                    if (searchMode === 'equals') {
-                        return cellStr === query;
-                    } else if (searchMode === 'startsWith') {
-                        return cellStr.startsWith(query);
-                    } else {
-                        return queryWords.every(word => cellStr.includes(word));
-                    }
+                filteredRows = rawRows.filter(row => {
+                    if (!row) return false;
+                    return searchColumns.some(col => {
+                        const rawVal = row[col.rawIndex];
+                        if (rawVal === null || rawVal === undefined) return false;
+                        const cellStr = caseSensitive ? String(rawVal) : remove_accents(rawVal);
+
+                        if (searchMode === 'equals') {
+                            return cellStr === query;
+                        } else if (searchMode === 'startsWith') {
+                            return cellStr.startsWith(query);
+                        } else {
+                            return queryWords.every(word => cellStr.includes(word));
+                        }
+                    });
                 });
-            });
-        }
+            }
 
-        // 5. PIPELINE BƯỚC 2: SORTING
-        let sortedRows = [...filteredRows];
+            const hasRuntimeSort = Boolean(runtimeState.sortOverride);
+            const hasSetupSort = !hasRuntimeSort && setupSortLevels.length > 0;
 
-        if (runtimeState.sortOverride) {
-            const overrideCol = tableColumns.find(c => c.fieldId === runtimeState.sortOverride.fieldId);
-            if (overrideCol) {
-                const overrideRawIdx = overrideCol.rawIndex;
-                const dir = runtimeState.sortOverride.direction === 'desc' ? -1 : 1;
-                const colType = overrideCol.type;
+            sortedRows = filteredRows;
+            if ((hasRuntimeSort || hasSetupSort) && filteredRows === rawRows) {
+                sortedRows = rawRows.slice();
+            } else if (hasRuntimeSort || hasSetupSort) {
+                sortedRows = filteredRows.slice();
+            }
 
+            if (hasRuntimeSort) {
+                const overrideCol = tableColumns.find(c => c.fieldId === runtimeState.sortOverride.fieldId);
+                if (overrideCol) {
+                    const overrideRawIdx = overrideCol.rawIndex;
+                    const dir = runtimeState.sortOverride.direction === 'desc' ? -1 : 1;
+                    const colType = overrideCol.type;
+
+                    sortedRows.sort((rowA, rowB) => {
+                        if (!rowA && !rowB) return 0;
+                        if (!rowA) return 1;
+                        if (!rowB) return -1;
+                        return dir * compareValues(rowA[overrideRawIdx], rowB[overrideRawIdx], colType);
+                    });
+                } else {
+                    runtimeState.sortOverride = null;
+                }
+            } else if (hasSetupSort) {
                 sortedRows.sort((rowA, rowB) => {
                     if (!rowA && !rowB) return 0;
                     if (!rowA) return 1;
                     if (!rowB) return -1;
-                    return dir * compareValues(rowA[overrideRawIdx], rowB[overrideRawIdx], colType);
-                });
-            } else {
-                runtimeState.sortOverride = null;
-            }
-        } else if (setupSortLevels.length > 0) {
-            sortedRows.sort((rowA, rowB) => {
-                if (!rowA && !rowB) return 0;
-                if (!rowA) return 1;
-                if (!rowB) return -1;
 
-                for (const level of setupSortLevels) {
-                    const dir = level.direction === 'desc' ? -1 : 1;
-                    const res = compareValues(rowA[level.rawIndex], rowB[level.rawIndex], level.type);
-                    if (res !== 0) {
-                        return dir * res;
+                    for (const level of setupSortLevels) {
+                        const dir = level.direction === 'desc' ? -1 : 1;
+                        const res = compareValues(rowA[level.rawIndex], rowB[level.rawIndex], level.type);
+                        if (res !== 0) {
+                            return dir * res;
+                        }
                     }
-                }
-                return 0;
-            });
+                    return 0;
+                });
+            }
+
+            processedRowsCache.dataRef = currentData;
+            processedRowsCache.key = processedRowsKey;
+            processedRowsCache.rows = sortedRows;
         }
 
-        // 5.1 TÍNH TOÁN DÒNG TỔNG CỘNG TRÊN sortedRows
-        const { summaryValues } = calculateSummaryValues(
-            sortedRows,
-            visibleColumns,
-            summaryType,
+        // 5.1 TÍNH TOÁN DÒNG TỔNG CỘNG TRÊN sortedRows (CÓ CACHE)
+        const summaryCacheKey = JSON.stringify({
             showSummaryRow,
+            summaryType,
+            visibleColumns: visibleColumns.map(c => [c.fieldId, c.rawIndex, c.isMetric]),
             metricAggOverridesByName,
             columnNumberFormatMap
-        );
+        });
 
-        // 6. PIPELINE BƯỚC 3: PAGINATION
+        let summaryValues;
+        if (
+            summaryCache.rowsRef === sortedRows &&
+            summaryCache.key === summaryCacheKey &&
+            summaryCache.result
+        ) {
+            summaryValues = summaryCache.result;
+        } else {
+            summaryValues = calculateSummaryValues(
+                sortedRows,
+                visibleColumns,
+                summaryType,
+                showSummaryRow,
+                metricAggOverridesByName,
+                columnNumberFormatMap
+            ).summaryValues;
+
+            summaryCache.rowsRef = sortedRows;
+            summaryCache.key = summaryCacheKey;
+            summaryCache.result = summaryValues;
+        }
+
+        // 6. PIPELINE BƯỚC 3: PAGINATION & SAFE GUARD
         const defaultPageSizeFromStyle = Number((styleConfig.defaultPageSize && styleConfig.defaultPageSize.value !== undefined) ? styleConfig.defaultPageSize.value : 10);
-        const pageSize = runtimeState.pageSizeOverride !== null ? runtimeState.pageSizeOverride : defaultPageSizeFromStyle;
-
+        const requestedPageSize = runtimeState.pageSizeOverride !== null ? runtimeState.pageSizeOverride : defaultPageSizeFromStyle;
         const totalRows = sortedRows.length;
+
+        let pageSize = requestedPageSize;
+        if (pageSize === -1 && totalRows > MAX_RENDER_ALL_ROWS) {
+            pageSize = SAFE_FALLBACK_PAGE_SIZE;
+            configWarnings.push(
+                `Hiển thị Tất cả bị giới hạn an toàn khi có hơn ${MAX_RENDER_ALL_ROWS.toLocaleString('en-US')} dòng. Đang dùng ${SAFE_FALLBACK_PAGE_SIZE.toLocaleString('en-US')} dòng/trang để tránh treo trình duyệt.`
+            );
+        }
+
         const actualPageSize = pageSize === -1 ? totalRows : pageSize;
         const totalPages = Math.max(1, Math.ceil(totalRows / (actualPageSize || 1)));
 
@@ -381,8 +477,17 @@ function renderTable() {
             wrapper.appendChild(warnBox);
         }
 
-        // HÀM XỬ LÝ XUẤT EXCEL
-        function handleExportExcel(preOpenedWindow = null) {
+        // HÀM XỬ LÝ XUẤT EXCEL (ASYNC)
+        async function handleExportExcel(preOpenedWindow = null) {
+            if (exportInProgress) {
+                if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
+                alert('Một tác vụ xuất file đang chạy. Vui lòng hoàn tất tác vụ hiện tại trước.');
+                return;
+            }
+
+            exportInProgress = true;
+            setExportButtonsBusy(true);
+
             try {
                 if (!rawRows || rawRows.length === 0) {
                     if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
@@ -401,20 +506,41 @@ function renderTable() {
                     return;
                 }
 
+                const hasSummary = showSummaryRow && rowsToExport.length > 0;
+                const excelWorksheetRows = 1 + rowsToExport.length + (hasSummary ? 1 : 0);
+                if (excelWorksheetRows > EXCEL_MAX_WORKSHEET_ROWS) {
+                    if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
+                    alert(`Excel chỉ hỗ trợ tối đa ${EXCEL_MAX_WORKSHEET_ROWS.toLocaleString('en-US')} dòng trên một sheet. Vui lòng dùng CSV.`);
+                    return;
+                }
+
                 const exportHeaders = [];
                 if (showSTT) exportHeaders.push('STT');
                 visibleColumns.forEach(c => exportHeaders.push(c.name));
 
-                const excelRows = [];
-                const excelDataObjects = [];
-                rowsToExport.forEach((row, rIdx) => {
-                    const rowData = [];
-                    const rowObj = {};
-                    if (showSTT) {
-                        rowData.push(rIdx + 1);
-                        rowObj['STT'] = rIdx + 1;
+                const excelColumnWidths = exportHeaders.map(h => Math.min(Math.max(String(h || '').length + 3, 10), 60));
+                const updateColumnWidth = (colIdx, value) => {
+                    const len = (value === null || value === undefined) ? 0 : String(value).length;
+                    const width = Math.min(Math.max(len + 3, 10), 60);
+                    if (width > excelColumnWidths[colIdx]) {
+                        excelColumnWidths[colIdx] = width;
                     }
-                    visibleColumns.forEach(c => {
+                };
+
+                const excelRows = [];
+                for (let rIdx = 0; rIdx < rowsToExport.length; rIdx++) {
+                    const row = rowsToExport[rIdx];
+                    const rowData = [];
+                    let exportColIdx = 0;
+
+                    if (showSTT) {
+                        const sttVal = rIdx + 1;
+                        rowData.push(sttVal);
+                        updateColumnWidth(exportColIdx++, sttVal);
+                    }
+
+                    for (let cIdx = 0; cIdx < visibleColumns.length; cIdx++) {
+                        const c = visibleColumns[cIdx];
                         const colNameLower = (c.name || '').trim().toLowerCase();
                         const colNameNoAccent = remove_accents(c.name || '');
                         const colFieldId = (c.fieldId || '').trim().toLowerCase();
@@ -428,41 +554,47 @@ function renderTable() {
                             formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
                         }
                         rowData.push(formattedVal);
-                        rowObj[c.name] = formattedVal;
-                    });
+                        updateColumnWidth(exportColIdx++, formattedVal);
+                    }
+
                     excelRows.push(rowData);
-                    excelDataObjects.push(rowObj);
-                });
+
+                    if ((rIdx + 1) % EXPORT_YIELD_EVERY_ROWS === 0) {
+                        await yieldToBrowser();
+                    }
+                }
 
                 // Bổ sung dòng Tổng cộng vào Excel (nếu bật)
-                if (showSummaryRow && rowsToExport.length > 0) {
+                if (hasSummary) {
                     const summaryRowExcel = [];
-                    const summaryRowObj = {};
+                    let exportColIdx = 0;
+
                     if (showSTT) {
                         summaryRowExcel.push(summaryLabel);
-                        summaryRowObj['STT'] = summaryLabel;
+                        updateColumnWidth(exportColIdx++, summaryLabel);
                     }
+
                     let isFirstDataCol = !showSTT;
-                    visibleColumns.forEach(c => {
+                    for (let cIdx = 0; cIdx < visibleColumns.length; cIdx++) {
+                        const c = visibleColumns[cIdx];
                         const sumData = summaryValues[c.fieldId];
                         if (sumData && sumData.isNumeric) {
                             summaryRowExcel.push(sumData.raw);
-                            summaryRowObj[c.name] = sumData.raw;
+                            updateColumnWidth(exportColIdx++, sumData.raw);
                         } else if (isFirstDataCol) {
                             summaryRowExcel.push(summaryLabel);
-                            summaryRowObj[c.name] = summaryLabel;
+                            updateColumnWidth(exportColIdx++, summaryLabel);
                             isFirstDataCol = false;
                         } else {
                             summaryRowExcel.push('');
-                            summaryRowObj[c.name] = '';
+                            exportColIdx++;
                         }
-                    });
+                    }
+
                     if (summaryPosition === 'top') {
                         excelRows.unshift(summaryRowExcel);
-                        excelDataObjects.unshift(summaryRowObj);
                     } else {
                         excelRows.push(summaryRowExcel);
-                        excelDataObjects.push(summaryRowObj);
                     }
                 }
 
@@ -470,23 +602,36 @@ function renderTable() {
                 const fileName = `Bao_cao_rawdata_${todayStr}.xlsx`;
                 const filterInfo = extractActiveFilterInfo(currentData);
 
-                downloadViaHelper({
+                await downloadViaHelper({
                     type: 'EXCEL_DOWNLOAD',
                     headers: exportHeaders,
                     rows: excelRows,
-                    excelData: excelDataObjects,
+                    columnWidths: excelColumnWidths,
                     filterInfo: filterInfo,
                     fileName: fileName
                 }, preOpenedWindow);
+
             } catch (err) {
                 if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                 console.error('[ExcelViz] Export error:', err);
                 alert('Lỗi khi xuất file: ' + err.message);
+            } finally {
+                exportInProgress = false;
+                setExportButtonsBusy(false);
             }
         }
 
-        // HÀM XỬ LÝ XUẤT CSV (BẢO TOÀN SỐ 0 ĐẦU)
-        function handleExportCsv(preOpenedWindow = null) {
+        // HÀM XỬ LÝ XUẤT CSV (ASYNC)
+        async function handleExportCsv(preOpenedWindow = null) {
+            if (exportInProgress) {
+                if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
+                alert('Một tác vụ xuất file đang chạy. Vui lòng hoàn tất tác vụ hiện tại trước.');
+                return;
+            }
+
+            exportInProgress = true;
+            setExportButtonsBusy(true);
+
             try {
                 if (!rawRows || rawRows.length === 0) {
                     if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
@@ -510,10 +655,13 @@ function renderTable() {
                 visibleColumns.forEach(c => exportHeaders.push(c.name));
 
                 const csvRows = [];
-                rowsToExport.forEach((row, rIdx) => {
+                for (let rIdx = 0; rIdx < rowsToExport.length; rIdx++) {
+                    const row = rowsToExport[rIdx];
                     const rowData = [];
                     if (showSTT) rowData.push(rIdx + 1);
-                    visibleColumns.forEach(c => {
+
+                    for (let cIdx = 0; cIdx < visibleColumns.length; cIdx++) {
+                        const c = visibleColumns[cIdx];
                         const colNameLower = (c.name || '').trim().toLowerCase();
                         const colNameNoAccent = remove_accents(c.name || '');
                         const colFieldId = (c.fieldId || '').trim().toLowerCase();
@@ -525,16 +673,22 @@ function renderTable() {
                             formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
                         }
                         rowData.push(formattedVal);
-                    });
+                    }
+
                     csvRows.push(rowData);
-                });
+
+                    if ((rIdx + 1) % EXPORT_YIELD_EVERY_ROWS === 0) {
+                        await yieldToBrowser();
+                    }
+                }
 
                 // Bổ sung dòng Tổng cộng vào CSV (nếu bật)
                 if (showSummaryRow && rowsToExport.length > 0) {
                     const summaryRowCsv = [];
                     if (showSTT) summaryRowCsv.push(summaryLabel);
                     let isFirstDataCol = !showSTT;
-                    visibleColumns.forEach(c => {
+                    for (let cIdx = 0; cIdx < visibleColumns.length; cIdx++) {
+                        const c = visibleColumns[cIdx];
                         const sumData = summaryValues[c.fieldId];
                         if (sumData && sumData.isNumeric) {
                             summaryRowCsv.push(sumData.raw);
@@ -544,7 +698,8 @@ function renderTable() {
                         } else {
                             summaryRowCsv.push('');
                         }
-                    });
+                    }
+
                     if (summaryPosition === 'top') {
                         csvRows.unshift(summaryRowCsv);
                     } else {
@@ -556,7 +711,7 @@ function renderTable() {
                 const csvFileName = `Bao_cao_rawdata_${todayStr}.csv`;
                 const filterInfo = extractActiveFilterInfo(currentData);
 
-                downloadViaHelper({
+                await downloadViaHelper({
                     type: 'CSV_DOWNLOAD',
                     headers: exportHeaders,
                     rows: csvRows,
@@ -567,6 +722,9 @@ function renderTable() {
                 if (preOpenedWindow && !preOpenedWindow.closed) preOpenedWindow.close();
                 console.error('[ExcelViz] CSV Export error:', err);
                 alert('Lỗi khi xuất CSV: ' + err.message);
+            } finally {
+                exportInProgress = false;
+                setExportButtonsBusy(false);
             }
         }
 
@@ -593,7 +751,7 @@ function renderTable() {
             toolbarLeft.appendChild(btnColPopup);
         }
 
-        // Nút Xuất Excel (Cảnh báo đỏ nếu >200k dòng)
+        // Nút Xuất Excel
         if (showExcelExport) {
             const isHeavyExcel = totalRows > 200000;
             const btnExcel = document.createElement('button');
@@ -609,17 +767,17 @@ function renderTable() {
                 </svg>
                 <span>${excelLabel}</span>
             `;
-            btnExcel.addEventListener('click', () => {
+            btnExcel.addEventListener('click', async () => {
                 let preWin = null;
                 try {
                     preWin = window.open(DOWNLOADER_URL, '_blank');
                 } catch (e) {}
-                handleExportExcel(preWin);
+                await handleExportExcel(preWin);
             });
             toolbarLeft.appendChild(btnExcel);
         }
 
-        // Nút Xuất CSV (Bảo toàn số 0 đầu)
+        // Nút Xuất CSV
         if (showCsvExport) {
             const btnCsv = document.createElement('button');
             btnCsv.className = 'btn-csv';
@@ -633,17 +791,17 @@ function renderTable() {
                 </svg>
                 <span>CSV</span>
             `;
-            btnCsv.addEventListener('click', () => {
+            btnCsv.addEventListener('click', async () => {
                 let preWin = null;
                 try {
                     preWin = window.open(DOWNLOADER_URL, '_blank');
                 } catch (e) {}
-                handleExportCsv(preWin);
+                await handleExportCsv(preWin);
             });
             toolbarLeft.appendChild(btnCsv);
         }
 
-        // Ô Tìm kiếm (Chỉ hiện khi có chọn searchFields ở Setup)
+        // Ô Tìm kiếm (Debounced)
         if (showSearch && canSearch) {
             const searchBox = document.createElement('div');
             searchBox.className = 'search-box';
@@ -667,7 +825,22 @@ function renderTable() {
             searchInput.addEventListener('input', (e) => {
                 runtimeState.searchText = e.target.value;
                 runtimeState.currentPage = 1;
-                renderTable();
+
+                if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(() => {
+                    searchDebounceTimer = null;
+                    renderTable();
+                }, SEARCH_DEBOUNCE_MS);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+                    searchDebounceTimer = null;
+                    runtimeState.searchText = e.target.value;
+                    runtimeState.currentPage = 1;
+                    renderTable();
+                }
             });
 
             searchBox.appendChild(searchInput);
@@ -679,6 +852,8 @@ function renderTable() {
                 clearBtn.innerHTML = '✕';
                 clearBtn.title = 'Xóa tìm kiếm';
                 clearBtn.addEventListener('click', () => {
+                    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+                    searchDebounceTimer = null;
                     runtimeState.searchText = '';
                     runtimeState.currentPage = 1;
                     renderTable();
@@ -703,7 +878,14 @@ function renderTable() {
         sizeOptions.forEach(size => {
             const opt = document.createElement('option');
             opt.value = size;
-            opt.textContent = size === -1 ? 'Tất cả' : size;
+            if (size === -1) {
+                opt.textContent = totalRows > MAX_RENDER_ALL_ROWS
+                    ? `Tất cả (chỉ <= ${MAX_RENDER_ALL_ROWS.toLocaleString('en-US')} dòng)`
+                    : 'Tất cả';
+                opt.disabled = totalRows > MAX_RENDER_ALL_ROWS;
+            } else {
+                opt.textContent = size;
+            }
             if (pageSize === size) opt.selected = true;
             pageSelect.appendChild(opt);
         });
@@ -994,6 +1176,16 @@ function renderTable() {
 let renderRafId = null;
 function drawVisualization(data) {
     try {
+        if (currentData !== data) {
+            processedRowsCache.dataRef = null;
+            processedRowsCache.key = '';
+            processedRowsCache.rows = null;
+
+            summaryCache.rowsRef = null;
+            summaryCache.key = '';
+            summaryCache.result = null;
+        }
+
         currentData = data;
         if (renderRafId) cancelAnimationFrame(renderRafId);
         renderRafId = requestAnimationFrame(() => {
