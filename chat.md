@@ -1,313 +1,543 @@
-Ừ, mình đã **sign-off bản `customLooker(2).zip`** trước, chưa xét phần Allow/F5.
-
-## Kết quả: **CHƯA sign-off production 100% — khoảng 90%**
-
-Các fix chính đã apply **đúng**:
-
-* `src/export.js`: handshake `PING → PONG → payload 1 lần → ACK` ✅
-* Không còn `excelDataObjects` duplicate ✅
-* `src/index.js`: cache filter/sort ✅
-* Cache summary ✅
-* Search debounce 250ms ✅
-* Chặn `Tất cả` khi >5.000 rows ✅
-* Export async/yield mỗi 5.000 rows ✅
-* Chặn Excel >1.048.576 rows ✅
-* `downloader.html`: SheetJS 0.20.3 ✅
-* Dense worksheet ✅
-* CSV chunk 5.000 rows ✅
-* Bundle `index.bundle.v3.32.js` **đã chứa code fix mới** ✅
-* `node --check` source + bundle đều PASS ✅
-
-Nhưng mình thấy **2 chỗ nên fix trước production**.
-
-### 1. HIGH — CSV Formula Injection
-
-Trong `downloader.html`, hiện tại:
-
-```js
-function escapeCsvCell(val) {
-    if (val === null || val === undefined || val === '') return '';
-
-    const s = String(val);
-
-    if (/^0\d+$/.test(s.trim()))
-        return `="${s.trim()}"`;
-
-    if (
-        s.includes(',') ||
-        s.includes('"') ||
-        s.includes('\n') ||
-        s.includes('\r')
-    ) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-
-    return s;
-}
-```
-
-Nếu data có:
-
-```text
-=HYPERLINK(...)
-+cmd...
-@SUM(...)
-```
-
-CSV mở trong Excel có thể bị hiểu là formula.
-
-Nên sửa thành:
-
-```js
-function escapeCsvCell(val) {
-    if (val === null || val === undefined || val === '') {
-        return '';
-    }
-
-    const originalIsString = typeof val === 'string';
-    let s = String(val);
-
-    // Bảo toàn số 0 đầu.
-    // Chỉ cho phép công thức dạng ="0123" khi nội dung 100% là chữ số.
-    if (/^0\d+$/.test(s.trim())) {
-        return `="${s.trim()}"`;
-    }
-
-    // Chống CSV / Formula Injection.
-    // Numeric thật (number) như -123 vẫn giữ là số.
-    if (
-        originalIsString &&
-        /^[=+\-@\t\r]/.test(s)
-    ) {
-        s = "'" + s;
-    }
-
-    if (
-        s.includes(',') ||
-        s.includes('"') ||
-        s.includes('\n') ||
-        s.includes('\r')
-    ) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-
-    return s;
-}
-```
-
-**Chỗ này mình khuyên bắt buộc sửa.**
-
----
-
-### 2. HIGH — downloader vẫn giữ 288k rows trong RAM sau khi tải xong
-
-Trong `downloader.html` hiện có:
-
-```js
-globalData = {
-    headers,
-    rows,
-    fileName,
-    filterInfo,
-    columnWidths,
-    isCsv
-};
-```
-
-Sau khi Excel tải xong, `globalData.rows` vẫn giữ nguyên toàn bộ:
-
-```text
-288,151 rows
-```
-
-cho đến khi user đóng downloader tab.
-
-Nghĩa là fix đã giảm peak RAM khá nhiều, nhưng sau export browser vẫn có thể giữ hàng trăm MB.
-
-Trong `processPayload()` sau đoạn:
-
-```js
-const isHeavy = rows.length > 200000;
-```
-
-mình đề xuất thêm cuối function:
-
-```js
-// Dataset lớn: giải phóng raw rows sau khi file đã tạo xong.
-// Tránh tab downloader giữ hàng trăm MB RAM vô thời hạn.
-if (isHeavy && success) {
-    setTimeout(() => {
-        if (globalData) {
-            globalData.rows = null;
-            globalData.columnWidths = null;
-        }
-
-        if (btnExcelEl) {
-            btnExcelEl.disabled = true;
-            btnExcelEl.textContent =
-                '✓ Đã tải Excel - xuất lại từ báo cáo';
-        }
-
-        if (btnCsvEl) {
-            btnCsvEl.disabled = true;
-            btnCsvEl.textContent =
-                '✓ Đã tải - xuất lại từ báo cáo';
-        }
-    }, 0);
-}
-```
-
-Và sửa 2 nút tải lại:
-
-**Cũ:**
-
-```js
-if (!globalData) return;
-```
-
-**Mới:**
-
-```js
-if (
-    !globalData ||
-    !Array.isArray(globalData.rows)
-) {
-    return;
-}
-```
-
-Với data <200k thì vẫn giữ tính năng:
-
-```text
-Tải lại Excel
-Tải lại CSV
-```
-
-Với >200k thì tải xong giải phóng RAM.
-
-Mình thấy cách này hợp lý hơn cho project của bạn.
-
----
-
-### Có một tối ưu nhỏ nữa mình khuyên apply
-
-Trong `drawVisualization()` hiện tại:
-
-```js
-function drawVisualization(data) {
-    try {
-        currentData = data;
-
-        ...
-```
-
-Nên clear cache cũ khi Looker gửi dataset mới:
-
-```js
-function drawVisualization(data) {
-    try {
-
-        if (currentData !== data) {
-            processedRowsCache.dataRef = null;
-            processedRowsCache.key = '';
-            processedRowsCache.rows = null;
-
-            summaryCache.rowsRef = null;
-            summaryCache.key = '';
-            summaryCache.result = null;
-        }
-
-        currentData = data;
-
-        if (renderRafId) {
-            cancelAnimationFrame(renderRafId);
-        }
-
-        renderRafId = requestAnimationFrame(() => {
-            renderTable();
-        });
-
-    } catch (err) {
-        console.error(
-            '[ExcelViz] drawVisualization error:',
-            err
-        );
-    }
-}
-```
-
-Lợi ích khi user đổi:
-
-```text
-Date Range
-Filter
-Dimension
-Metric
-```
-
-dataset mới tới thì cache 288k rows cũ được nhả reference ngay, tránh giữ **old dataset + new dataset** cùng lúc lâu hơn cần thiết.
-
----
-
-## Còn một cleanup nhưng không chặn production
-
-`package.json` vẫn có:
-
-```json
-"xlsx": "^0.18.5"
-```
-
-nhưng source Webpack **không hề import `xlsx`** nữa.
-
-`downloader.html` đang dùng:
-
-```html
-https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js
-```
-
-Vậy dependency này thừa. Có thể bỏ:
-
-```bash
-npm uninstall xlsx
-```
-
-rồi commit lại:
-
-```text
-package.json
-package-lock.json
-```
-
-Không ảnh hưởng runtime hiện tại.
-
----
-
-### Sign-off cuối của mình
-
-Sau khi fix **CSV injection + release `globalData.rows` >200k**, mình sẽ cho bản này:
-
-**🟢 SIGN-OFF production cho performance fix v3.32.**
-
-Architecture lúc đó sẽ khá ổn:
-
-```text
-Looker 288k
-   ↓
-cache filter/sort
-   ↓
-exportRows 1 bản
-   ↓
-PING/PONG
-   ↓
-postMessage 1 lần
-   ↓
-Downloader
-   ↓
-Dense XLSX / Chunk CSV
-   ↓
-Download
-   ↓
-release 288k rows khỏi RAM
-```
-
-Một caveat duy nhất: mình xác nhận bundle hiện tại có các fingerprint của code mới và syntax PASS, nhưng mình **chưa rebuild clean từ `npm ci` trong môi trường này** vì install dependency bị timeout. Vì vậy sau 2 chỉnh sửa trên, ở máy của bạn nên chạy lại `npm run build`, rồi mình sign-off lần cuối trước khi upload GCS.
+m=pm_base:8663 [COMPONENT ERROR] {"reason":125,"iconClassName":"authorize-error-icon","title":"Authorization Required","description":"The community visualization has been modified and requires updated consent in order to be rendered","linkText":"Allow","errorActionMode":3}
+_.lg_.setError @ m=pm_base:8663
+m=pm_base:9006 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+lg_3nc @ m=pm_base:9006
+m=pm_base:2239 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+(anonymous) @ m=pm_base:2239
+c @ m=pm_base:2130
+after @ m=pm_base:2239
+Xc @ m=pm_base:2548
+enter @ m=pm_base:2549
+(anonymous) @ m=pm_base:2615
+(anonymous) @ m=pm_base:2380
+(anonymous) @ m=pm_base:2386
+Ki @ m=pm_base:2383
+Nj @ m=pm_base:2387
+(anonymous) @ m=pm_base:2615
+$digest @ m=pm_base:2478
+(anonymous) @ m=pm_base:2481
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+Ud @ m=pm_base:2466
+resolve @ m=pm_base:2464
+ye @ m=pm_base:2427
+Vb @ m=pm_base:2427
+Gd @ m=pm_base:2427
+Ac @ m=pm_base:2433
+hd.onload @ m=pm_base:2434
+lg_uia @ m=pm_base:3240
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+p @ m=pm_base:386
+e @ m=pm_base:376
+q @ m=pm_base:386
+thirdPartyViz/?vizId=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%C2%A0excelExportTable&dscId=cd-1y9to3wh6d&js=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%2Findex.bundle.v3.33.js&css=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%2Findex.v3.33.css:29 [Violation] 'message' handler took 284ms
+thirdPartyContent/?vizId=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%C2%A0excelExportTable&reportId=&js=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%2Findex.bundle.v3.33.js&css=gs%3A%2F%2Fanalytics_merap%2Fexcelchart3%2Findex.v3.33.css&cacheBuster=&heartbeatEnabled=false&dscId=cd-1y9to3wh6d:21 [Violation] 'message' handler took 190ms
+m=pm_base:9006 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+lg_3nc @ m=pm_base:9006
+_.lg_KH.Xa @ m=pm_base:9011
+lg_Oka @ m=pm_base:464
+lg_Lka @ m=pm_base:464
+lg_Mka @ m=pm_base:463
+lg_Zna @ m=pm_base:574
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg_0na @ m=pm_base:572
+lg_Zna @ m=pm_base:574
+lg_4na @ m=pm_base:576
+lg_Zna @ m=pm_base:575
+lg__na @ m=pm_base:572
+Wa @ m=pm_base:3301
+_.lg_Qf.Ca @ m=pm_base:3304
+(anonymous) @ m=pm_base:3348
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+_.lg_Kf.run @ m=pm_base:3262
+next @ m=pm_base:3348
+lg_rbb.next @ m=pm_base:3161
+_.lg_.zf @ m=pm_base:3161
+_.lg_.next @ m=pm_base:3160
+_.lg_.next @ m=pm_base:3164
+_.lg_Y.emit @ m=pm_base:3258
+lg_Dla @ m=pm_base:493
+onHasTask @ m=pm_base:495
+l.hasTask @ m=pm_base:361
+l.hda @ m=pm_base:361
+h.hda @ m=pm_base:355
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+Ud @ m=pm_base:2466
+resolve @ m=pm_base:2464
+lg_TOe @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:6610
+(anonymous) @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:6595
+_.lg_goc @ m=pm_base:9015
+(anonymous) @ m=pm_base:9015
+(anonymous) @ m=pm_base:2489
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+Xc @ m=pm_base:2489
+_.lg_kmc @ m=pm_base:9015
+(anonymous) @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:6593
+(anonymous) @ m=pm_base:2465
+$digest @ m=pm_base:2478
+(anonymous) @ m=pm_base:2481
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+then @ m=pm_base:2468
+lg_7we.oa @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:4416
+lg_7we.ua @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:4421
+lg_7we.Ua @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:4414
+_.lg_Zye.resolve @ m=sy8,syw,syn,sy1i,sy9,syo,sy14,syy,sym,sy7,syl,syv,syx,syz,sy15,syq,sy19,sy1d,sy1e,sy1n,sy1b,sy1p,sy2,sy1u,sy1z,sy1w,sy21,sy1x,syp,syr,sy1s,sy1t,sy1v,sy1y,sy20,sy24,sy25,sy27,pm_base_additional:4605
+_.lg_.load @ m=pm_base:8651
+(anonymous) @ m=pm_base:8647
+lg_rbb.next @ m=pm_base:3161
+_.lg_.zf @ m=pm_base:3161
+_.lg_.next @ m=pm_base:3160
+_.lg_.next @ m=pm_base:3164
+_.lg_fd.next @ m=pm_base:3169
+next @ m=pm_base:324
+lg_rbb.next @ m=pm_base:3161
+_.lg_.zf @ m=pm_base:3161
+_.lg_.next @ m=pm_base:3160
+(anonymous) @ m=pm_base:295
+b.zf @ m=pm_base:3170
+_.lg_.next @ m=pm_base:3160
+(anonymous) @ m=pm_base:297
+_.lg_.next @ m=pm_base:3160
+_.lg_.next @ m=pm_base:3164
+_.lg_T.next @ m=pm_base:3168
+_.lg_.refreshMergedError @ m=pm_base:8665
+_.lg_.setError @ m=pm_base:8663
+(anonymous) @ m=syf,syg,sy10,sys,syd,syh,sy1f,sy1g,sy1,sy13,sy1c,sy11,sy12,sya,sy5,syj,syt,syk,syu,syi,sy18,sy6,sy1a,sy16,sy1o,syb,sy4,sye,sy17,sy1k,sy1l,sy1m,sy1j,sy28,syc,sy1r,sy2g,sy0,sy22,sy3,sy1h,sy23,sy26,sy2f,sy2m,sy2l,sy2d,sy2k,sy2n,sy2o,pm_navigation:6349
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+Ud @ m=pm_base:2466
+resolve @ m=pm_base:2464
+ye @ m=pm_base:2427
+Vb @ m=pm_base:2427
+Gd @ m=pm_base:2427
+Ac @ m=pm_base:2433
+hd.onload @ m=pm_base:2434
+lg_uia @ m=pm_base:3240
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+p @ m=pm_base:386
+e @ m=pm_base:376
+q @ m=pm_base:386
+XMLHttpRequest.send
+m @ m=pm_base:399
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:400
+d.<computed> @ m=pm_base:373
+(anonymous) @ m=pm_base:2435
+Mb @ m=pm_base:2429
+(anonymous) @ m=pm_base:2426
+(anonymous) @ m=pm_base:2465
+$digest @ m=pm_base:2478
+(anonymous) @ m=pm_base:2481
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+ye @ m=pm_base:2466
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+ye @ m=pm_base:2466
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+p @ m=pm_base:386
+e @ m=pm_base:376
+q @ m=pm_base:386
+XMLHttpRequest.send
+m @ m=pm_base:399
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:400
+d.<computed> @ m=pm_base:373
+(anonymous) @ m=pm_base:2435
+Mb @ m=pm_base:2429
+(anonymous) @ m=pm_base:2426
+(anonymous) @ m=pm_base:2465
+$digest @ m=pm_base:2478
+(anonymous) @ m=pm_base:2481
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+ye @ m=pm_base:2466
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+ye @ m=pm_base:2466
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+p @ m=pm_base:386
+e @ m=pm_base:376
+q @ m=pm_base:386
+XMLHttpRequest.send
+m @ m=pm_base:399
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:400
+d.<computed> @ m=pm_base:373
+(anonymous) @ m=pm_base:2435
+Mb @ m=pm_base:2429
+(anonymous) @ m=pm_base:2426
+(anonymous) @ m=pm_base:2465
+$digest @ m=pm_base:2478
+(anonymous) @ m=pm_base:2481
+qc @ m=pm_base:2365
+(anonymous) @ m=pm_base:2368
+n.<computed> @ m=pm_base:392
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+then @ m=pm_base:2468
+lg_hPb @ m=pm_base:5685
+(anonymous) @ m=pm_base:5703
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+ue @ m=pm_base:2466
+ye @ m=pm_base:2466
+l.invoke @ m=pm_base:359
+onInvoke @ m=pm_base:494
+l.invoke @ m=pm_base:359
+h.run @ m=pm_base:350
+(anonymous) @ m=pm_base:416
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+e @ m=pm_base:347
+m.invokeTask @ m=pm_base:363
+invoke @ m=pm_base:362
+m.args.<computed> @ m=pm_base:391
+setTimeout
+e @ m=pm_base:391
+l.scheduleTask @ m=pm_base:360
+onScheduleTask @ m=pm_base:356
+l.scheduleTask @ m=pm_base:360
+h.scheduleTask @ m=pm_base:353
+h.scheduleMacroTask @ m=pm_base:354
+(anonymous) @ m=pm_base:392
+d.<computed> @ m=pm_base:373
+Ud.defer @ m=pm_base:2368
+$evalAsync @ m=pm_base:2481
+(anonymous) @ m=pm_base:2463
+Qd @ m=pm_base:2465
+then @ m=pm_base:2468
+_.lg_Wx.send @ m=pm_base:5690
+(anonymous) @ m=pm_base:8258
+lg_Mhc @ m=pm_base:8258
+(anonymous) @ m=pm_base:8271
+lg_vna @ m=pm_base:548
+f @ m=pm_base:547
+(anonymous) @ m=pm_base:3463
+l.invokeTask @ m=pm_base:360
+onInvokeTask @ m=pm_base:494
+l.invokeTask @ m=pm_base:360
+h.runTask @ m=pm_base:352
+m.invokeTask @ m=pm_base:362
+p @ m=pm_base:386
+e @ m=pm_base:376
+q @ m=pm_base:386
+m=pm_base:2239 An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
