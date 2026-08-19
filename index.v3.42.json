@@ -10,7 +10,7 @@
                     "type": "DIMENSION",
                     "options": {
                         "min": 0,
-                        "max": 50
+                        "max": 200
                     }
                 },
                 {
