@@ -36,6 +36,43 @@ export function remove_accents(str) {
     }
 }
 
+// HÀM PARSE CẤU HÌNH JSON {"key": "value"} CHO TỪNG CỘT (STRICT JSON)
+export function parseJsonConfig(rawString) {
+    const resultMap = {};
+    if (!rawString || typeof rawString !== 'string') return resultMap;
+
+    let str = rawString.trim();
+    if (!str) return resultMap;
+
+    // Tự động bao bọc { } nếu người dùng chỉ nhập "key":"val", "key2":"val2"
+    if (!str.startsWith('{')) str = '{' + str;
+    if (!str.endsWith('}')) str = str + '}';
+
+    try {
+        const parsed = JSON.parse(str);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            Object.entries(parsed).forEach(([k, v]) => {
+                if (k && v !== undefined && v !== null) {
+                    const key = String(k).trim().toLowerCase();
+                    let val = String(v).trim();
+                    if (key && val) {
+                        const valLower = val.toLowerCase();
+                        if (valLower === 'count_distinct' || valLower === 'distinct') {
+                            val = 'countd';
+                        }
+                        resultMap[key] = val;
+                        resultMap[remove_accents(key)] = val;
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        // Strict JSON: Nếu sai cú pháp JSON thì không can thiệp
+    }
+
+    return resultMap;
+}
+
 // HÀM KIỂM TRA ĐỊNH DẠNG NGÀY THÁNG
 export function isDateValue(val, fieldType = '') {
     if (val === null || val === undefined) return false;

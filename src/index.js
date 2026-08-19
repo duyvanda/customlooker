@@ -9,7 +9,8 @@ import {
     remove_accents,
     isDateValue,
     isNumericValue,
-    formatDateValue
+    formatDateValue,
+    parseJsonConfig
 } from './formatters.js';
 
 import {
@@ -195,72 +196,20 @@ function renderTable() {
         }
         if (!['sum', 'avg', 'min', 'max', 'count', 'countd'].includes(summaryType)) summaryType = 'sum';
 
-        // Parse per-column summary config: "Doanh Thu:avg, Số Lượng:sum, don gia:min, brand:countd"
-        const metricAggOverridesByName = {};
-        try {
-            const perColRaw = (styleConfig.perColumnSummary && styleConfig.perColumnSummary.value !== undefined)
-                ? String(styleConfig.perColumnSummary.value).trim() : '';
-            if (perColRaw) {
-                perColRaw.split(',').forEach(part => {
-                    const trimmed = part.trim();
-                    if (!trimmed) return;
-                    const lastColonIdx = trimmed.lastIndexOf(':');
-                    if (lastColonIdx !== -1) {
-                        const colKey = trimmed.substring(0, lastColonIdx).trim();
-                        const aggVal = trimmed.substring(lastColonIdx + 1).trim().toLowerCase();
-                        if (['sum', 'avg', 'min', 'max', 'count', 'countd', 'count_distinct', 'distinct'].includes(aggVal) && colKey) {
-                            const normalizedAgg = (aggVal === 'count_distinct' || aggVal === 'distinct') ? 'countd' : aggVal;
-                            metricAggOverridesByName[colKey.toLowerCase()] = normalizedAgg;
-                            metricAggOverridesByName[remove_accents(colKey)] = normalizedAgg;
-                        }
-                    }
-                });
-            }
-        } catch (e) { /* ignore parse errors */ }
+        // 1. Phép tính từng Cột (perColumnSummary JSON): {"Doanh Thu":"sum", "Đơn giá":"avg", "Mã KH":"countd"}
+        const metricAggOverridesByName = parseJsonConfig(
+            (styleConfig.perColumnSummary && styleConfig.perColumnSummary.value !== undefined) ? styleConfig.perColumnSummary.value : ''
+        );
 
-        // Parse per-column Date/Time format config (Chuẩn BigQuery): "Ngày Giao:%d/%m/%Y, Created At:%Y-%m-%d %H:%M:%S"
-        const columnDateFormatMap = {};
-        try {
-            const rawDateFmt = (styleConfig.perColumnDateFormat && styleConfig.perColumnDateFormat.value !== undefined)
-                ? String(styleConfig.perColumnDateFormat.value).trim() : '';
-            if (rawDateFmt) {
-                rawDateFmt.split(',').forEach(part => {
-                    const trimmed = part.trim();
-                    if (!trimmed) return;
-                    const lastColonIdx = trimmed.lastIndexOf(':');
-                    if (lastColonIdx !== -1) {
-                        const colKey = trimmed.substring(0, lastColonIdx).trim();
-                        const fmtVal = trimmed.substring(lastColonIdx + 1).trim();
-                        if (colKey && fmtVal) {
-                            columnDateFormatMap[colKey.toLowerCase()] = fmtVal;
-                            columnDateFormatMap[remove_accents(colKey)] = fmtVal;
-                        }
-                    }
-                });
-            }
-        } catch (e) { /* ignore parse errors */ }
+        // 2. Định dạng Date/Time (perColumnDateFormat JSON): {"Ngày Giao":"%d/%m/%Y", "Created At":"%d-%m-%Y %H:%M:%S"}
+        const columnDateFormatMap = parseJsonConfig(
+            (styleConfig.perColumnDateFormat && styleConfig.perColumnDateFormat.value !== undefined) ? styleConfig.perColumnDateFormat.value : ''
+        );
 
-        // Parse per-column Number format config (Chuẩn BigQuery / Format): "Doanh Thu:%'.2f, Số Lượng:%'d, Tỷ Lệ:%'.2f%%"
-        const columnNumberFormatMap = {};
-        try {
-            const rawNumFmt = (styleConfig.perColumnNumberFormat && styleConfig.perColumnNumberFormat.value !== undefined)
-                ? String(styleConfig.perColumnNumberFormat.value).trim() : '';
-            if (rawNumFmt) {
-                rawNumFmt.split(',').forEach(part => {
-                    const trimmed = part.trim();
-                    if (!trimmed) return;
-                    const lastColonIdx = trimmed.lastIndexOf(':');
-                    if (lastColonIdx !== -1) {
-                        const colKey = trimmed.substring(0, lastColonIdx).trim();
-                        const fmtVal = trimmed.substring(lastColonIdx + 1).trim();
-                        if (colKey && fmtVal) {
-                            columnNumberFormatMap[colKey.toLowerCase()] = fmtVal;
-                            columnNumberFormatMap[remove_accents(colKey)] = fmtVal;
-                        }
-                    }
-                });
-            }
-        } catch (e) { /* ignore parse errors */ }
+        // 3. Định dạng Number (perColumnNumberFormat JSON): {"Doanh Thu":"%'.2f", "Số Lượng":"%'d", "Tỷ Lệ":"%'.2f%%"}
+        const columnNumberFormatMap = parseJsonConfig(
+            (styleConfig.perColumnNumberFormat && styleConfig.perColumnNumberFormat.value !== undefined) ? styleConfig.perColumnNumberFormat.value : ''
+        );
 
         let autoSummaryLabel = 'Tổng cộng';
         if (summaryType === 'avg') autoSummaryLabel = 'Trung bình (Avg)';
