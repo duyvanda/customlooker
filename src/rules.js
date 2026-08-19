@@ -235,12 +235,37 @@ export function evaluateConditionalRule(rawIdx, val, rules, fieldType = '') {
 }
 
 // HÀM FORMAT CELL TOÀN DIỆN VÀ ESCAPE HTML AN TOÀN
-export function formatTableCell(rawIdx, val, rules, fieldType = '', datePattern = '', numberPattern = '') {
+export function formatTableCell(rawIdx, val, rules, fieldType = '', datePattern = '', numberPattern = '', urlLabel = '') {
     if (val === null || val === undefined || String(val).trim() === '') {
         return '';
     }
 
     const str = String(val).trim();
+    const ft = String(fieldType || '').toUpperCase();
+
+    // 1. NẾU LÀ CỘT KIỂU URL (Từ Data Source Looker Studio)
+    if (ft.includes('URL') || ft.includes('LINK')) {
+        let rawLabel = '';
+        let rawUrl = str;
+        const urlMatch = str.match(/^(.*?)\s*(https?:\/\/[^\s]+)$/i);
+        if (urlMatch) {
+            rawLabel = urlMatch[1].trim();
+            rawUrl = urlMatch[2].trim();
+        }
+
+        const displayLabel = urlLabel || rawLabel || rawUrl;
+        let cleanUrl = rawUrl.trim();
+        const isSafeProtocol = /^(https?:\/\/|mailto:)/i.test(cleanUrl);
+        if (!isSafeProtocol && !cleanUrl.startsWith('/') && !cleanUrl.startsWith('#')) {
+            cleanUrl = 'https://' + cleanUrl;
+        }
+
+        const safeUrl = escapeHtml(encodeURI(cleanUrl));
+        const safeLabel = escapeHtml(displayLabel);
+
+        return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="cell-hyperlink" title="${escapeHtml(rawUrl)}"><span>${safeLabel}</span><svg class="link-ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+    }
+
     const isDate = isDateValue(val, fieldType) || Boolean(datePattern);
     const isNum = !isDate && (isNumericValue(val, fieldType) || Boolean(numberPattern));
     const num = isNum ? parseNumericValue(val, fieldType) : NaN;

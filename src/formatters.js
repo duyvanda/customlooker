@@ -54,12 +54,8 @@ export function parseJsonConfig(rawString) {
             Object.entries(parsed).forEach(([k, v]) => {
                 if (k && v !== undefined && v !== null) {
                     const key = String(k).trim().toLowerCase();
-                    let val = String(v).trim();
+                    const val = String(v).trim();
                     if (key && val) {
-                        const valLower = val.toLowerCase();
-                        if (valLower === 'count_distinct' || valLower === 'distinct') {
-                            val = 'countd';
-                        }
                         resultMap[key] = val;
                         resultMap[remove_accents(key)] = val;
                     }

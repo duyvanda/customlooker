@@ -27,9 +27,14 @@ export function calculateSummaryValues(sortedRows, visibleColumns, summaryType, 
                 || metricAggOverridesByName[colFieldId]
                 || null;
 
-            const colAggType = col.isMetric
+            const rawAggType = col.isMetric
                 ? (manualOverride || col.fieldSummaryType || summaryType)
                 : manualOverride;
+
+            let colAggType = rawAggType ? String(rawAggType).trim().toLowerCase() : null;
+            if (colAggType === 'count_distinct' || colAggType === 'distinct') {
+                colAggType = 'countd';
+            }
 
             if (!colAggType) {
                 summaryValues[col.fieldId] = {

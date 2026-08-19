@@ -211,6 +211,11 @@ function renderTable() {
             (styleConfig.perColumnNumberFormat && styleConfig.perColumnNumberFormat.value !== undefined) ? styleConfig.perColumnNumberFormat.value : ''
         );
 
+        // 4. Nhãn hiển thị cho cột URL (perColumnUrlLabel JSON): {"image_url":"Image Link nè", "chi_tiet":"Xem chi tiết"}
+        const columnUrlLabelMap = parseJsonConfig(
+            (styleConfig.perColumnUrlLabel && styleConfig.perColumnUrlLabel.value !== undefined) ? styleConfig.perColumnUrlLabel.value : ''
+        );
+
         let autoSummaryLabel = 'Tổng cộng';
         if (summaryType === 'avg') autoSummaryLabel = 'Trung bình (Avg)';
         else if (summaryType === 'min') autoSummaryLabel = 'Nhỏ nhất (Min)';
@@ -496,10 +501,11 @@ function renderTable() {
                         const colDateFmt = columnDateFormatMap[colNameLower] || columnDateFormatMap[colNameNoAccent] || columnDateFormatMap[colFieldId] || '';
 
                         const val = row ? row[c.rawIndex] : '';
-                        let formattedVal = val;
-                        if (val === null || val === undefined) {
-                            formattedVal = '';
-                        } else if (isDateValue(val, c.type) || Boolean(colDateFmt)) {
+                        let formattedVal = (val === null || val === undefined) ? '' : val;
+                        if (formattedVal !== '' && c.type && (String(c.type).toUpperCase().includes('URL') || String(c.type).toUpperCase().includes('LINK'))) {
+                            const urlMatch = String(val).match(/^(.*?)\s*(https?:\/\/[^\s]+)$/i);
+                            formattedVal = urlMatch ? urlMatch[2] : formattedVal;
+                        } else if (formattedVal !== '' && (isDateValue(val, c.type) || Boolean(colDateFmt))) {
                             formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
                         }
                         rowData.push(formattedVal);
@@ -618,7 +624,10 @@ function renderTable() {
 
                         const val = row ? row[c.rawIndex] : '';
                         let formattedVal = (val === null || val === undefined) ? '' : val;
-                        if (isDateValue(val, c.type) || Boolean(colDateFmt)) {
+                        if (formattedVal !== '' && c.type && (String(c.type).toUpperCase().includes('URL') || String(c.type).toUpperCase().includes('LINK'))) {
+                            const urlMatch = String(val).match(/^(.*?)\s*(https?:\/\/[^\s]+)$/i);
+                            formattedVal = urlMatch ? urlMatch[2] : formattedVal;
+                        } else if (formattedVal !== '' && (isDateValue(val, c.type) || Boolean(colDateFmt))) {
                             formattedVal = formatDateValue(val, colDateFmt || '%d-%m-%Y');
                         }
                         rowData.push(formattedVal);
@@ -984,6 +993,7 @@ function renderTable() {
 
                     const colDateFmt = columnDateFormatMap[colNameLower] || columnDateFormatMap[colNameNoAccent] || columnDateFormatMap[colFieldId] || '';
                     const colNumFmt = columnNumberFormatMap[colNameLower] || columnNumberFormatMap[colNameNoAccent] || columnNumberFormatMap[colFieldId] || '';
+                    const colUrlLabel = columnUrlLabelMap[colNameLower] || columnUrlLabelMap[colNameNoAccent] || columnUrlLabelMap[colFieldId] || '';
 
                     const rawVal = row[col.rawIndex];
                     const isDate = isDateValue(rawVal, col.type) || Boolean(colDateFmt);
@@ -1003,7 +1013,7 @@ function renderTable() {
                         if (colStyle.italic) td.style.setProperty('font-style', 'italic', 'important');
                     }
 
-                    td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type, colDateFmt, colNumFmt);
+                    td.innerHTML = formatTableCell(col.rawIndex, rawVal, setupConditionalRules, col.type, colDateFmt, colNumFmt, colUrlLabel);
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
