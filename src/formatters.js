@@ -43,6 +43,7 @@ export function isDateValue(val, fieldType = '') {
     if (str === '') return false;
 
     const ft = String(fieldType || '').toUpperCase();
+    if (ft === 'TEXT' || ft === 'STRING') return false;
     if (ft && (ft.includes('DATE') || ft.includes('YEAR') || ft.includes('TIME') || ft.includes('MONTH') || ft.includes('DAY'))) {
         return true;
     }
